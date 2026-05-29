@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "env": {
+    "VITE_SERVER_URL": "https://your-backend.railway.app"
+  }
+}

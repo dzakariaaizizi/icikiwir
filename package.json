@@ -1,0 +1,17 @@
+{
+  "name": "officebeats",
+  "version": "1.0.0",
+  "description": "Collaborative office music queue system",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\" --names \"SERVER,CLIENT\" --prefix-colors \"cyan,magenta\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "build": "cd client && npm install && npm run build",
+    "start": "cd server && npm install && npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

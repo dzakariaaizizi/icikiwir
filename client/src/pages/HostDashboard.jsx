@@ -660,6 +660,7 @@ export default function HostDashboard() {
               progress={progress}
               duration={duration}
               isGuessingGameEnabled={isGuessingGameEnabled}
+              hasQueue={(session?.queue || []).length > 0}
             />
           </section>
 

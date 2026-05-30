@@ -22,8 +22,8 @@ const io = new Server(server, {
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  pingInterval: 10000,
-  pingTimeout: 25000,
+  pingInterval: 25000,
+  pingTimeout: 60000,
   connectionStateRecovery: { maxDisconnectionDuration: 2 * 60 * 1000 },
 });
 
@@ -106,6 +106,7 @@ function sanitizeSession(session) {
       activeSongCount: g.activeSongCount || 0,
       score: g.score || 0,
       totalRequestedSongs: g.totalRequestedSongs || 0,
+      isOnline: g.isOnline !== undefined ? g.isOnline : true,
     })),
     queue: session.queue || [],
     currentTrack: session.currentTrack || null,
@@ -195,7 +196,11 @@ io.on('connection', (socket) => {
         // Update socketId guest dengan yang baru
         await store.updateSession(session.id, (s) => {
           const g = s.guests.find((g) => g.id === guestId);
-          if (g) { g.socketId = socket.id; g.deviceId = deviceId || g.deviceId; }
+          if (g) {
+            g.socketId = socket.id;
+            g.deviceId = deviceId || g.deviceId;
+            g.isOnline = true;
+          }
         });
       } else {
         // Guest sudah dihapus (disconnect terlalu lama), tambah ulang
@@ -504,7 +509,7 @@ io.on('connection', (socket) => {
       if (!sessionId) return;
 
       if (role === 'guest' && guestId) {
-        // Tunggu 30 detik sebelum hapus guest — beri kesempatan reconnect/refresh
+        // Set guest status to offline after 5 seconds of disconnection
         setTimeout(async () => {
           try {
             const session = await store.getSession(sessionId);
@@ -512,16 +517,15 @@ io.on('connection', (socket) => {
             // Cek apakah guest sudah reconnect (socketId sudah beda)
             const guest = (session.guests || []).find((g) => g.id === guestId);
             if (guest && guest.socketId === socket.id) {
-              // Socket masih sama = belum reconnect, hapus sekarang
-              await store.removeGuestFromSession(sessionId, guestId);
+              // Socket masih sama = belum reconnect, set status offline
+              await store.updateGuestOnlineStatus(sessionId, guestId, false);
               const updated = await store.getSession(sessionId);
               if (updated) {
                 io.to(sessionId).emit('room:updated', sanitizeSession(updated));
-                io.to(sessionId).emit('guest:left', { guestId, nickname });
               }
             }
           } catch (err) { console.error('[disconnect grace]', err); }
-        }, 30000); // 30 detik grace period
+        }, 5000); // 5 seconds grace period before marking offline
       }
 
       if (role === 'host') {

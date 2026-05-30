@@ -57,10 +57,10 @@ export default function GuestView() {
   const storedIdentity = getStoredIdentity(code);
 
   // Join state
-  const [joined, setJoined] = useState(false);
+  const [joined, setJoined] = useState(!!storedIdentity);
   const [nickname, setNickname] = useState(storedIdentity?.nickname || '');
   const [joining, setJoining] = useState(false);
-  const [myGuestId, setMyGuestId] = useState(null);
+  const [myGuestId, setMyGuestId] = useState(storedIdentity?.guestId || null);
   const [deviceBlocked, setDeviceBlocked] = useState(false);
 
   // Session state
@@ -86,7 +86,22 @@ export default function GuestView() {
   const prevTrackRef = useRef(null);
 
   // Play history (daftar lagu yang sudah diputar, disimpan lokal per sesi)
-  const [playHistory, setPlayHistory] = useState([]);
+  const [playHistory, setPlayHistory] = useState(() => {
+    try {
+      const stored = localStorage.getItem(`ob_history_${code}`);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    if (code) {
+      try {
+        localStorage.setItem(`ob_history_${code}`, JSON.stringify(playHistory));
+      } catch {}
+    }
+  }, [playHistory, code]);
 
   const socketRef = useRef(null);
   const urlInputRef = useRef(null);
@@ -204,6 +219,10 @@ export default function GuestView() {
     });
 
     socket.on('error', ({ message }) => {
+      if (message.includes('Sesi tidak ditemukan')) {
+        clearIdentity(code);
+        navigate('/');
+      }
       // Check if the error is a device block
       if (message.includes('Perangkat ini sudah terdaftar')) {
         setDeviceBlocked(true);

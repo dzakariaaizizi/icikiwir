@@ -78,6 +78,16 @@ export default function GuestView() {
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('submit'); // 'submit' | 'queue'
 
+  // Guessing game state
+  const [myGuess, setMyGuess] = useState('');
+  const [hasGuessed, setHasGuessed] = useState(false);
+  const [submittedGuess, setSubmittedGuess] = useState(null);
+  const [roundResult, setRoundResult] = useState(null);
+  const prevTrackRef = useRef(null);
+
+  // Play history (daftar lagu yang sudah diputar, disimpan lokal per sesi)
+  const [playHistory, setPlayHistory] = useState([]);
+
   const socketRef = useRef(null);
   const urlInputRef = useRef(null);
 
@@ -139,8 +149,19 @@ export default function GuestView() {
     });
 
     socket.on('playback:next', ({ track }) => {
-      setCurrentTrack(track);
+      // Simpan lagu yang baru selesai ke history sebelum ganti
+      setCurrentTrack((prev) => {
+        if (prev) {
+          setPlayHistory((h) => [{ ...prev, playedAt: Date.now() }, ...h].slice(0, 50));
+        }
+        return track;
+      });
       setIsPlaying(track !== null);
+      // Reset tebakan setiap lagu baru
+      setHasGuessed(false);
+      setMyGuess('');
+      setSubmittedGuess(null);
+      setRoundResult(null);
     });
 
     socket.on('playback:state', ({ isPlaying }) => {
@@ -165,6 +186,11 @@ export default function GuestView() {
       setSubmitting(false);
       setValidating(false);
       setSubmitError(reason);
+    });
+
+    socket.on('game:roundResults', (results) => {
+      setRoundResult(results);
+      setHasGuessed(false); // boleh lihat hasil tapi udah kelar
     });
 
     socket.on('session:closed', ({ message }) => {
@@ -197,6 +223,7 @@ export default function GuestView() {
       socket.off('queue:validating');
       socket.off('queue:add:success');
       socket.off('queue:add:rejected');
+      socket.off('game:roundResults');
       socket.off('session:closed');
       socket.off('host:disconnected');
       socket.off('error');
@@ -252,6 +279,14 @@ export default function GuestView() {
     setYoutubeUrl('');
     setSubmitError('');
     urlInputRef.current?.focus();
+  }
+
+  function handleGuess(guestId, guestNickname) {
+    if (hasGuessed || !socketRef.current?.connected) return;
+    socketRef.current.emit('guest:guess', { guessedGuestId: guestId });
+    setHasGuessed(true);
+    setSubmittedGuess({ guestId, nickname: guestNickname });
+    addToast(`Tebakan "${guestNickname}" terkirim! ⏳`, 'info');
   }
 
   // My active song count + dynamic limit from session
@@ -435,6 +470,102 @@ export default function GuestView() {
         />
       </div>
 
+      {/* Guessing Game */}
+      {session?.isGuessingGameEnabled && currentTrack && (() => {
+        // Siapa saja yang bisa ditebak? Semua guest kecuali diri sendiri dan requester lagu saat ini
+        const guessableGuests = (session?.guests || []).filter(
+          (g) => g.id !== myGuestId && g.id !== currentTrack?.requestedBy
+        );
+        const iAmRequester = currentTrack?.requestedBy === myGuestId;
+
+        // Tampilkan hasil ronde
+        if (roundResult) {
+          const iWasCorrect = roundResult.correctGuessers?.includes(myGuestId);
+          const requesterNick = roundResult.requesterNickname || '?';
+          return (
+            <div className={`guessing-game-card ${iWasCorrect ? 'success' : ''}`} style={{ margin: '0 var(--space-4) var(--space-2)' }}>
+              <div className="guessing-game-glow" />
+              <div className="guessing-success-content">
+                <div className="success-icon">{iWasCorrect ? '✓' : '🎵'}</div>
+                <div className="success-text">
+                  <p>{iWasCorrect ? 'Tebakanmu benar!' : `Jawabannya: ${requesterNick}`}</p>
+                  <small>
+                    {roundResult.correctGuessers?.length || 0} orang menebak benar
+                  </small>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        if (iAmRequester) {
+          return (
+            <div className="guessing-game-card" style={{ margin: '0 var(--space-4) var(--space-2)' }}>
+              <div className="guessing-game-glow" />
+              <div className="guessing-game-content">
+                <div className="guessing-own-track">
+                  <span className="guessing-icon">🎤</span>
+                  <h3>Lagu kamu yang lagi diputar!</h3>
+                  <p>Teman-temanmu sedang menebak siapa yang request lagu ini.</p>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        if (hasGuessed && submittedGuess) {
+          return (
+            <div className="guessing-game-card success" style={{ margin: '0 var(--space-4) var(--space-2)' }}>
+              <div className="guessing-success-content">
+                <div className="success-icon">⏳</div>
+                <div className="success-text">
+                  <p>Tebakan terkirim: <strong>{submittedGuess.nickname}</strong></p>
+                  <small>Tunggu lagu selesai untuk melihat hasilnya</small>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="guessing-game-card" style={{ margin: '0 var(--space-4) var(--space-2)' }}>
+            <div className="guessing-game-glow" />
+            <div className="guessing-game-content">
+              <div className="guessing-title">
+                <span className="guessing-icon">🎯</span>
+                Siapa yang request lagu ini?
+              </div>
+              <div className="guessing-options">
+                {guessableGuests.length === 0 ? (
+                  <span className="guessing-empty">Belum ada kandidat untuk ditebak</span>
+                ) : (
+                  guessableGuests.map((g) => {
+                    const initials = g.nickname.slice(0, 2).toUpperCase();
+                    const hue = [...g.id].reduce((n, c) => n + c.charCodeAt(0), 0) % 360;
+                    return (
+                      <button
+                        key={g.id}
+                        className="guessing-btn"
+                        onClick={() => handleGuess(g.id, g.nickname)}
+                        disabled={hasGuessed}
+                      >
+                        <div
+                          className="guessing-avatar"
+                          style={{ background: `hsl(${hue}, 60%, 40%)` }}
+                        >
+                          {initials}
+                        </div>
+                        {g.nickname}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Tabs */}
       <div className="guest-tabs">
         <button
@@ -477,6 +608,18 @@ export default function GuestView() {
             <polyline points="17 6 23 6 23 12" />
           </svg>
           Klasemen
+        </button>
+        <button
+          id="tab-history"
+          className={`guest-tab ${activeTab === 'history' ? 'active' : ''}`}
+          onClick={() => setActiveTab('history')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="12 8 12 12 14 14" />
+            <path d="M3.05 11a9 9 0 1 0 .5-4" />
+            <polyline points="3 3 3 7 7 7" />
+          </svg>
+          History
         </button>
       </div>
 
@@ -702,6 +845,54 @@ export default function GuestView() {
                       ))}
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div className="queue-panel animate-fadeIn" style={{ padding: '16px' }}>
+            <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              🎵 Riwayat Lagu Dimainkan
+            </h4>
+            {playHistory.length === 0 ? (
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '32px 0' }}>
+                Belum ada lagu yang selesai diputar.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {playHistory.map((track, i) => (
+                  <div key={track.id + i} style={{
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    padding: '10px 12px', background: 'var(--bg-card)',
+                    border: '1px solid var(--border)', borderRadius: '10px', opacity: 0.85
+                  }}>
+                    {track.thumbnail && (
+                      <img
+                        src={track.thumbnail}
+                        alt=""
+                        style={{ width: 52, height: 38, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }}
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {track.title}
+                      </p>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+                        {track.authorName}
+                        {track.requestedByNickname && (
+                          <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                            • diminta {track.requestedByNickname}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                      {new Date(track.playedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </div>

@@ -86,8 +86,34 @@ export default function GuestView() {
     const socket = connectSocket();
     socketRef.current = socket;
 
-    socket.on('connect', () => setConnected(true));
+    socket.on('connect', () => {
+      setConnected(true);
+      // Auto-rejoin jika punya stored identity (setelah refresh/reconnect)
+      const identity = getStoredIdentity(code);
+      if (identity?.guestId && identity?.nickname) {
+        socket.emit('guest:rejoin', {
+          code,
+          sessionId,
+          guestId: identity.guestId,
+          nickname: identity.nickname,
+          deviceId: deviceId.current,
+        });
+      }
+    });
     socket.on('disconnect', () => setConnected(false));
+
+    // Response dari rejoin berhasil
+    socket.on('guest:rejoined', ({ guestId, nickname: nick, session }) => {
+      setMyGuestId(guestId);
+      setNickname(nick);
+      setSession(session);
+      setSongLimit(session.maxSongsPerGuest || 3);
+      setCurrentTrack(session.currentTrack);
+      setIsPlaying(session.isPlaying);
+      setJoined(true);
+      setJoining(false);
+      saveIdentity(code, { guestId, nickname: nick });
+    });
 
     socket.on('guest:joined', ({ guestId, nickname: nick, session }) => {
       setMyGuestId(guestId);
@@ -164,6 +190,7 @@ export default function GuestView() {
       socket.off('connect');
       socket.off('disconnect');
       socket.off('guest:joined');
+      socket.off('guest:rejoined');
       socket.off('room:updated');
       socket.off('playback:next');
       socket.off('playback:state');

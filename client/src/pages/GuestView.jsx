@@ -467,17 +467,23 @@ export default function GuestView() {
           track={currentTrack}
           isPlaying={isPlaying}
           compact={true}
+          isGuessingGameEnabled={session?.isGuessingGameEnabled || false}
         />
       </div>
 
       {/* Guessing Game */}
       {session?.isGuessingGameEnabled && currentTrack && (() => {
-        // Siapa saja yang bisa ditebak? Semua guest kecuali diri sendiri dan requester lagu saat ini
-        // Semua guest bisa jadi jawaban kecuali diri sendiri
-        const guessableGuests = (session?.guests || []).filter(
-          (g) => g.id !== myGuestId
-        );
         const iAmRequester = currentTrack?.requestedBy === myGuestId;
+
+        // Semua guest kecuali diri sendiri
+        const guestList = (session?.guests || []).filter((g) => g.id !== myGuestId);
+
+        // Pastikan requester selalu ada di opsi — walau tidak ada di session.guests
+        // (bisa terjadi kalau guest disconnect setelah request)
+        const requesterInList = guestList.some((g) => g.id === currentTrack.requestedBy);
+        const guessableGuests = (!iAmRequester && !requesterInList && currentTrack.requestedBy)
+          ? [...guestList, { id: currentTrack.requestedBy, nickname: currentTrack.requestedByNickname || '?' }]
+          : guestList;
 
         // Tampilkan hasil ronde
         if (roundResult) {

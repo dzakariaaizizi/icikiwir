@@ -157,10 +157,6 @@ export default function GuestView() {
     socket.on('room:updated', (session) => {
       setSession(session);
       setSongLimit(session.maxSongsPerGuest || 3);
-      if (session.currentTrack) {
-        setCurrentTrack(session.currentTrack);
-        setIsPlaying(session.isPlaying);
-      }
     });
 
     socket.on('playback:next', ({ track, completed }) => {
@@ -837,7 +833,7 @@ export default function GuestView() {
                     .map((g, i) => (
                       <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px' }}>
                         <span style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {g.nickname}
+                          {i + 1}. {g.nickname}
                           {g.id === myGuestId && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '0.75rem' }}>(kamu)</span>}
                         </span>
                         <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 600 }}>{g.totalRequestedSongs} lagu</span>

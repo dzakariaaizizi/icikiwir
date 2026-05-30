@@ -386,6 +386,25 @@ io.on('connection', (socket) => {
     } catch (err) { console.error('[session:toggleGuessingGame]', err); }
   });
 
+  socket.on('guest:guess', async ({ guessedGuestId }) => {
+    try {
+      if (socket.data.role !== 'guest') return;
+      const { sessionId, guestId } = socket.data;
+      if (!guessedGuestId || !sessionId || !guestId) return;
+
+      const session = await store.getSession(sessionId);
+      if (!session?.isGuessingGameEnabled) return;
+      if (!session.currentTrack) return;
+      // Tidak boleh tebak kalau lagu adalah milik sendiri
+      if (session.currentTrack.requestedBy === guestId) return;
+      // Cek sudah tebak belum
+      if (session.currentGuesses?.[guestId]) return;
+
+      await store.recordGuess(sessionId, guestId, guessedGuestId);
+      socket.emit('guest:guessAck', { guessedGuestId });
+    } catch (err) { console.error('[guest:guess]', err); }
+  });
+
   socket.on('session:close', async () => {
     try {
       if (socket.data.role !== 'host') return;

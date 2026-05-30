@@ -475,25 +475,43 @@ export default function HostDashboard() {
               <p className="empty-guests">Belum ada guest. Bagikan kode sesi!</p>
             ) : (
               <ul className="guest-list">
-                {session?.guests?.map((g) => (
-                  <li key={g.id} className="guest-item animate-slideIn">
-                    <div
-                      className="guest-avatar"
-                      style={guestAvatarStyle(g.id)}
-                    >
-                      {g.nickname.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="guest-info">
-                      <span className="guest-name">{g.nickname}</span>
-                      <span className={`guest-songs ${
-                        g.activeSongCount >= songLimit ? 'at-limit' :
-                        g.activeSongCount >= songLimit - 1 ? 'near-limit' : ''
-                      }`}>
-                        {g.activeSongCount || 0}/{songLimit} lagu
-                      </span>
-                    </div>
-                  </li>
-                ))}
+                {session?.guests?.map((g) => {
+                  const isOnline = g.isOnline !== false;
+                  return (
+                    <li key={g.id} className="guest-item animate-slideIn" style={{ opacity: isOnline ? 1 : 0.6, transition: 'opacity 0.2s' }}>
+                      <div
+                        className="guest-avatar"
+                        style={guestAvatarStyle(g.id)}
+                      >
+                        {g.nickname.charAt(0).toUpperCase()}
+                        {!isOnline && (
+                          <span style={{
+                            position: 'absolute',
+                            bottom: '-2px',
+                            right: '-2px',
+                            fontSize: '0.7rem',
+                            background: 'var(--bg-card, #1e1e2e)',
+                            borderRadius: '50%',
+                            padding: '2px',
+                            lineHeight: 1
+                          }}>💤</span>
+                        )}
+                      </div>
+                      <div className="guest-info">
+                        <span className="guest-name" style={{ color: isOnline ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                          {g.nickname}
+                          {!isOnline && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '4px' }}>(offline)</span>}
+                        </span>
+                        <span className={`guest-songs ${
+                          g.activeSongCount >= songLimit ? 'at-limit' :
+                          g.activeSongCount >= songLimit - 1 ? 'near-limit' : ''
+                        }`}>
+                          {g.activeSongCount || 0}/{songLimit} lagu
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
@@ -624,17 +642,20 @@ export default function HostDashboard() {
                 <p className="empty-guests" style={{ fontSize: '0.85rem' }}>Belum ada data.</p>
               ) : (
                 <ul className="guest-list" style={{ gap: '8px' }}>
-                  {topRequesters.map((g, i) => (
-                    <li key={g.id} className="guest-item" style={{ padding: '6px' }}>
-                      <div className="guest-avatar" style={{ width: '24px', height: '24px', fontSize: '0.8rem', ...guestAvatarStyle(g.id) }}>
-                        {g.nickname.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="guest-info" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="guest-name" style={{ fontSize: '0.9rem' }}>{i + 1}. {g.nickname}</span>
-                        <span className="badge badge-indigo">{g.totalRequestedSongs} lagu</span>
-                      </div>
-                    </li>
-                  ))}
+                  {topRequesters.map((g, i) => {
+                    const isOnline = g.isOnline !== false;
+                    return (
+                      <li key={g.id} className="guest-item" style={{ padding: '6px', opacity: isOnline ? 1 : 0.6 }}>
+                        <div className="guest-avatar" style={{ width: '24px', height: '24px', fontSize: '0.8rem', ...guestAvatarStyle(g.id) }}>
+                          {g.nickname.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="guest-info" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span className="guest-name" style={{ fontSize: '0.9rem' }}>{i + 1}. {g.nickname}</span>
+                          <span className="badge badge-indigo">{g.totalRequestedSongs} lagu</span>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -645,17 +666,20 @@ export default function HostDashboard() {
                 <p className="empty-guests" style={{ fontSize: '0.85rem' }}>Belum ada data.</p>
               ) : (
                 <ul className="guest-list" style={{ gap: '8px' }}>
-                  {topGuessers.map((g, i) => (
-                    <li key={g.id} className="guest-item" style={{ padding: '6px' }}>
-                      <div className="guest-avatar" style={{ width: '24px', height: '24px', fontSize: '0.8rem', ...guestAvatarStyle(g.id) }}>
-                        {g.nickname.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="guest-info" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="guest-name" style={{ fontSize: '0.9rem' }}>{i + 1}. {g.nickname}</span>
-                        <span className="badge badge-emerald">{g.score} pts</span>
-                      </div>
-                    </li>
-                  ))}
+                  {topGuessers.map((g, i) => {
+                    const isOnline = g.isOnline !== false;
+                    return (
+                      <li key={g.id} className="guest-item" style={{ padding: '6px', opacity: isOnline ? 1 : 0.6 }}>
+                        <div className="guest-avatar" style={{ width: '24px', height: '24px', fontSize: '0.8rem', ...guestAvatarStyle(g.id) }}>
+                          {g.nickname.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="guest-info" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span className="guest-name" style={{ fontSize: '0.9rem' }}>{i + 1}. {g.nickname}</span>
+                          <span className="badge badge-emerald">{g.score} pts</span>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

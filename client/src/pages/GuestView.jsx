@@ -235,14 +235,21 @@ export default function GuestView() {
   // ──── DEVICE BLOCKED SCREEN ────
   if (deviceBlocked) {
     const handleResetDevice = () => {
-      // Hapus device ID lama dan buat yang baru — seolah perangkat baru
       const KEY = 'ob_device_id';
+      const oldDeviceId = localStorage.getItem(KEY);
       const newId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 10);
       localStorage.setItem(KEY, newId);
-      // Hapus juga identity tersimpan untuk sesi ini
       localStorage.removeItem(`ob_guest_${code}`);
-      // Reload halaman agar bisa join ulang
-      window.location.reload();
+
+      // Beritahu server agar hapus device ID lama dari sesi
+      const tempSocket = connectSocket();
+      tempSocket.emit('device:reset', { code, oldDeviceId });
+      // Reload setelah server konfirmasi, atau timeout 1.5 detik
+      const reloadTimer = setTimeout(() => window.location.reload(), 1500);
+      tempSocket.once('device:reset:ok', () => {
+        clearTimeout(reloadTimer);
+        window.location.reload();
+      });
     };
 
     return (

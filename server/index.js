@@ -182,6 +182,44 @@ io.on('connection', (socket) => {
     } catch (err) { console.error('[device:reset]', err); }
   });
 
+  socket.on('guest:rejoin', async ({ code, sessionId, guestId, nickname, deviceId }) => {
+    try {
+      const session = await store.getSessionByCode(code) || await store.getSession(sessionId);
+      if (!session) return socket.emit('error', { message: 'Sesi tidak ditemukan.' });
+
+      // Cek apakah guest masih ada di sesi
+      const existingGuest = (session.guests || []).find((g) => g.id === guestId);
+      if (existingGuest) {
+        // Update socketId guest dengan yang baru
+        await store.updateSession(session.id, (s) => {
+          const g = s.guests.find((g) => g.id === guestId);
+          if (g) { g.socketId = socket.id; g.deviceId = deviceId || g.deviceId; }
+        });
+      } else {
+        // Guest sudah dihapus (disconnect terlalu lama), tambah ulang
+        await store.addGuestToSession(session.id, {
+          id: guestId,
+          nickname: nickname,
+          socketId: socket.id,
+          deviceId: deviceId || null,
+        });
+      }
+
+      socket.join(session.id);
+      socket.data.role = 'guest';
+      socket.data.sessionId = session.id;
+      socket.data.guestId = guestId;
+      socket.data.nickname = nickname;
+      socket.data.deviceId = deviceId || null;
+
+      const updated = await store.getSession(session.id);
+      const fullSession = sanitizeSession(updated);
+      socket.emit('guest:rejoined', { guestId, nickname, session: fullSession });
+      io.to(session.id).emit('room:updated', fullSession);
+      console.log(`[Socket] Guest "${nickname}" RE-joined session ${session.code}`);
+    } catch (err) { console.error('[guest:rejoin]', err); }
+  });
+
   socket.on('guest:join', async ({ code, nickname, deviceId }) => {
     try {
       const session = await store.getSessionByCode(code);
@@ -363,17 +401,32 @@ io.on('connection', (socket) => {
     try {
       const { role, sessionId, guestId, nickname } = socket.data || {};
       if (!sessionId) return;
+
       if (role === 'guest' && guestId) {
-        await store.removeGuestFromSession(sessionId, guestId);
-        const session = await store.getSession(sessionId);
-        if (session) {
-          io.to(sessionId).emit('room:updated', sanitizeSession(session));
-          io.to(sessionId).emit('guest:left', { guestId, nickname });
-        }
+        // Tunggu 30 detik sebelum hapus guest — beri kesempatan reconnect/refresh
+        setTimeout(async () => {
+          try {
+            const session = await store.getSession(sessionId);
+            if (!session) return;
+            // Cek apakah guest sudah reconnect (socketId sudah beda)
+            const guest = (session.guests || []).find((g) => g.id === guestId);
+            if (guest && guest.socketId === socket.id) {
+              // Socket masih sama = belum reconnect, hapus sekarang
+              await store.removeGuestFromSession(sessionId, guestId);
+              const updated = await store.getSession(sessionId);
+              if (updated) {
+                io.to(sessionId).emit('room:updated', sanitizeSession(updated));
+                io.to(sessionId).emit('guest:left', { guestId, nickname });
+              }
+            }
+          } catch (err) { console.error('[disconnect grace]', err); }
+        }, 30000); // 30 detik grace period
       }
+
       if (role === 'host') {
         io.to(sessionId).emit('host:disconnected', { message: 'Host terputus dari sesi.' });
       }
+
       console.log(`[Socket] Disconnected: ${socket.id} (${role || 'unknown'})`);
     } catch (err) { console.error('[disconnect]', err); }
   });

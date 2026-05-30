@@ -1,12 +1,77 @@
 /**
- * OfficeBeats — Session Store (in-memory)
- * Stores all active sessions. Can be swapped for Redis later.
+ * OfficeBeats — Session Store (Redis-backed)
+ * Drop-in replacement for the in-memory store.
+ * Falls back to in-memory if REDIS_URL is not set (local dev).
  */
 
-const sessions = new Map();
+const SESSION_TTL_S = 8 * 60 * 60; // 8 hours in seconds
 
-const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+// ── Redis client setup ────────────────────────────────────────────────────────
+let redisClient = null;
+let useRedis = false;
 
+async function initRedis() {
+  if (!process.env.REDIS_URL) {
+    console.log('[SessionStore] No REDIS_URL found, using in-memory store.');
+    return;
+  }
+  try {
+    const { createClient } = require('redis');
+    redisClient = createClient({ url: process.env.REDIS_URL });
+    redisClient.on('error', (err) => console.error('[Redis] Error:', err));
+    await redisClient.connect();
+    useRedis = true;
+    console.log('[SessionStore] Connected to Redis ✓');
+  } catch (err) {
+    console.error('[SessionStore] Redis connection failed, falling back to memory:', err.message);
+  }
+}
+
+initRedis();
+
+// ── In-memory fallback ────────────────────────────────────────────────────────
+const memSessions = new Map();
+
+// ── Redis helpers ─────────────────────────────────────────────────────────────
+async function redisGet(sessionId) {
+  const raw = await redisClient.get(`session:${sessionId}`);
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function redisSet(session) {
+  await redisClient.setEx(
+    `session:${session.id}`,
+    SESSION_TTL_S,
+    JSON.stringify(session)
+  );
+}
+
+async function redisDel(sessionId) {
+  await redisClient.del(`session:${sessionId}`);
+}
+
+async function redisGetAll() {
+  const keys = await redisClient.keys('session:*');
+  if (!keys.length) return [];
+  const values = await Promise.all(keys.map(k => redisClient.get(k)));
+  return values.filter(Boolean).map(v => JSON.parse(v));
+}
+
+// ── Code ↔ sessionId index ────────────────────────────────────────────────────
+// Redis: store code→id mapping separately for fast lookup
+async function redisSetCodeIndex(code, sessionId) {
+  await redisClient.setEx(`code:${code}`, SESSION_TTL_S, sessionId);
+}
+async function redisGetByCode(code) {
+  const sessionId = await redisClient.get(`code:${code}`);
+  if (!sessionId) return null;
+  return redisGet(sessionId);
+}
+async function redisDelCodeIndex(code) {
+  await redisClient.del(`code:${code}`);
+}
+
+// ── Core helpers ──────────────────────────────────────────────────────────────
 function generateCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -20,12 +85,11 @@ function generateSessionId() {
   return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 }
 
-function createSession({ name, hostSocketId }) {
+// ── Public API (async-safe — all functions return Promises) ───────────────────
+
+async function createSession({ name, hostSocketId }) {
   let code;
-  // Ensure unique code
-  do {
-    code = generateCode();
-  } while (getSessionByCode(code));
+  do { code = generateCode(); } while (await getSessionByCode(code));
 
   const sessionId = generateSessionId();
   const session = {
@@ -33,83 +97,93 @@ function createSession({ name, hostSocketId }) {
     code,
     name: name || 'icikiwir',
     hostSocketId,
-    guests: [],      // [{ id, nickname, socketId, activeSongCount, deviceId }]
-    queue: [],       // [{ id, videoId, title, thumbnail, duration, requestedBy, requestedByNickname, addedAt }]
+    guests: [],
+    queue: [],
     currentTrack: null,
     isPlaying: false,
-    maxSongsPerGuest: 3,  // Host can change this (1–10)
-    deviceIds: [],        // Track device fingerprints to prevent duplicate users
+    maxSongsPerGuest: 3,
+    deviceIds: [],
     isGuessingGameEnabled: false,
-    currentGuesses: {},   // { guestId: guessedGuestId }
+    currentGuesses: {},
     createdAt: Date.now(),
     lastActivityAt: Date.now(),
   };
 
-  sessions.set(sessionId, session);
+  if (useRedis) {
+    await redisSet(session);
+    await redisSetCodeIndex(code, sessionId);
+  } else {
+    memSessions.set(sessionId, session);
+  }
   return session;
 }
 
-function getSession(sessionId) {
-  return sessions.get(sessionId) || null;
+async function getSession(sessionId) {
+  if (useRedis) return redisGet(sessionId);
+  return memSessions.get(sessionId) || null;
 }
 
-function getSessionByCode(code) {
-  for (const session of sessions.values()) {
-    if (session.code === code.toUpperCase()) return session;
+async function getSessionByCode(code) {
+  if (useRedis) return redisGetByCode(code.toUpperCase());
+  for (const s of memSessions.values()) {
+    if (s.code === code.toUpperCase()) return s;
   }
   return null;
 }
 
-function updateSession(sessionId, updater) {
-  const session = sessions.get(sessionId);
+async function updateSession(sessionId, updater) {
+  let session = await getSession(sessionId);
   if (!session) return null;
   updater(session);
   session.lastActivityAt = Date.now();
+  if (useRedis) await redisSet(session);
+  else memSessions.set(sessionId, session);
   return session;
 }
 
-function deleteSession(sessionId) {
-  sessions.delete(sessionId);
+async function deleteSession(sessionId) {
+  if (useRedis) {
+    const session = await redisGet(sessionId);
+    if (session) await redisDelCodeIndex(session.code);
+    await redisDel(sessionId);
+  } else {
+    memSessions.delete(sessionId);
+  }
 }
 
-function addGuestToSession(sessionId, guest) {
+async function addGuestToSession(sessionId, guest) {
   return updateSession(sessionId, (session) => {
     session.guests.push({ ...guest, activeSongCount: 0, score: 0, totalRequestedSongs: 0 });
-    // Register device fingerprint
     if (guest.deviceId && !session.deviceIds.includes(guest.deviceId)) {
       session.deviceIds.push(guest.deviceId);
     }
   });
 }
 
-function isDeviceRegistered(sessionId, deviceId) {
-  const session = sessions.get(sessionId);
+async function isDeviceRegistered(sessionId, deviceId) {
+  const session = await getSession(sessionId);
   if (!session || !deviceId) return false;
   return session.deviceIds.includes(deviceId);
 }
 
-function updateSongLimit(sessionId, limit) {
+async function updateSongLimit(sessionId, limit) {
   return updateSession(sessionId, (session) => {
     session.maxSongsPerGuest = Math.max(1, Math.min(10, limit));
   });
 }
 
-function removeGuestFromSession(sessionId, guestId) {
+async function removeGuestFromSession(sessionId, guestId) {
   return updateSession(sessionId, (session) => {
     const guest = session.guests.find((g) => g.id === guestId);
-    // Free up the device fingerprint slot
     if (guest?.deviceId) {
       session.deviceIds = session.deviceIds.filter((d) => d !== guest.deviceId);
     }
-    // Remove guest's songs from queue
-    session.queue = session.queue.filter(
-      (track) => track.requestedBy !== guestId
-    );
+    session.queue = session.queue.filter((t) => t.requestedBy !== guestId);
     session.guests = session.guests.filter((g) => g.id !== guestId);
   });
 }
 
-function addTrackToQueue(sessionId, track) {
+async function addTrackToQueue(sessionId, track) {
   return updateSession(sessionId, (session) => {
     const guest = session.guests.find((g) => g.id === track.requestedBy);
     if (guest) {
@@ -120,7 +194,7 @@ function addTrackToQueue(sessionId, track) {
   });
 }
 
-function removeTrackFromQueue(sessionId, trackId) {
+async function removeTrackFromQueue(sessionId, trackId) {
   return updateSession(sessionId, (session) => {
     const track = session.queue.find((t) => t.id === trackId);
     if (track) {
@@ -131,31 +205,25 @@ function removeTrackFromQueue(sessionId, trackId) {
   });
 }
 
-function dequeueNext(sessionId) {
+async function dequeueNext(sessionId) {
   let nextTrack = null;
   let roundResults = null;
 
-  updateSession(sessionId, (session) => {
+  await updateSession(sessionId, (session) => {
     if (session.currentTrack) {
-      // Decrement guest song count for completed track
       const guest = session.guests.find((g) => g.id === session.currentTrack.requestedBy);
       if (guest && guest.activeSongCount > 0) guest.activeSongCount--;
 
-      // Calculate scores if guessing game is enabled
       if (session.isGuessingGameEnabled) {
         const correctRequesterId = session.currentTrack.requestedBy;
         const correctGuessers = [];
-
         for (const [guesserId, guessedId] of Object.entries(session.currentGuesses)) {
           if (guessedId === correctRequesterId) {
             correctGuessers.push(guesserId);
             const guesser = session.guests.find(g => g.id === guesserId);
-            if (guesser) {
-              guesser.score = (guesser.score || 0) + 10;
-            }
+            if (guesser) guesser.score = (guesser.score || 0) + 10;
           }
         }
-
         roundResults = {
           track: session.currentTrack,
           requesterId: correctRequesterId,
@@ -165,29 +233,25 @@ function dequeueNext(sessionId) {
       }
     }
 
-    // Reset guesses for the next track
     session.currentGuesses = {};
-
     nextTrack = session.queue.shift() || null;
     session.currentTrack = nextTrack;
     session.isPlaying = nextTrack !== null;
   });
+
   return { nextTrack, roundResults };
 }
 
-function toggleGuessingGame(sessionId, enabled) {
+async function toggleGuessingGame(sessionId, enabled) {
   return updateSession(sessionId, (session) => {
     session.isGuessingGameEnabled = enabled;
-    if (!enabled) {
-      session.currentGuesses = {};
-    }
+    if (!enabled) session.currentGuesses = {};
   });
 }
 
-function recordGuess(sessionId, guestId, guessedGuestId) {
+async function recordGuess(sessionId, guestId, guessedGuestId) {
   return updateSession(sessionId, (session) => {
     if (session.isGuessingGameEnabled && session.currentTrack) {
-      // Prevent guessing if it's the user's own song
       if (session.currentTrack.requestedBy !== guestId) {
         session.currentGuesses[guestId] = guessedGuestId;
       }
@@ -195,16 +259,19 @@ function recordGuess(sessionId, guestId, guessedGuestId) {
   });
 }
 
-// Auto-cleanup expired sessions every 30 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, session] of sessions.entries()) {
-    if (now - session.lastActivityAt > SESSION_TTL_MS) {
-      sessions.delete(id);
-      console.log(`[SessionStore] Expired session ${id} (${session.code})`);
+// Auto-cleanup in-memory sessions (Redis handles its own TTL)
+if (!useRedis) {
+  setInterval(() => {
+    const now = Date.now();
+    const TTL_MS = SESSION_TTL_S * 1000;
+    for (const [id, session] of memSessions.entries()) {
+      if (now - session.lastActivityAt > TTL_MS) {
+        memSessions.delete(id);
+        console.log(`[SessionStore] Expired session ${id} (${session.code})`);
+      }
     }
-  }
-}, 30 * 60 * 1000);
+  }, 30 * 60 * 1000);
+}
 
 module.exports = {
   createSession,

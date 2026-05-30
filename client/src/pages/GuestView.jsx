@@ -5,7 +5,6 @@ import { connectSocket, disconnectSocket } from '../socket';
 import { NowPlaying } from '../components/NowPlaying';
 import { QueueList } from '../components/QueueList';
 import { useToast } from '../context/ToastContext';
-import { guestAvatarStyle } from '../utils/guestColors';
 import './GuestView.css';
 
 /**
@@ -77,8 +76,7 @@ export default function GuestView() {
   const [preview, setPreview] = useState(null);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState('submit'); // 'submit' | 'queue' | 'leaderboard'
-  const [hasGuessedCurrentTrack, setHasGuessedCurrentTrack] = useState(false);
+  const [activeTab, setActiveTab] = useState('submit'); // 'submit' | 'queue'
 
   const socketRef = useRef(null);
   const urlInputRef = useRef(null);
@@ -117,7 +115,6 @@ export default function GuestView() {
     socket.on('playback:next', ({ track }) => {
       setCurrentTrack(track);
       setIsPlaying(track !== null);
-      setHasGuessedCurrentTrack(false);
     });
 
     socket.on('playback:state', ({ isPlaying }) => {
@@ -142,14 +139,6 @@ export default function GuestView() {
       setSubmitting(false);
       setValidating(false);
       setSubmitError(reason);
-    });
-
-    socket.on('game:roundResults', ({ track, requesterNickname, correctGuessers }) => {
-      if (correctGuessers.includes(myGuestId)) {
-        addToast(`Tebakanmu Benar! Lagu ${track.title} diminta oleh ${requesterNickname}. +10 Poin! 🎉`, 'success');
-      } else {
-        addToast(`Lagu ${track.title} diminta oleh ${requesterNickname}. Ayo coba lagi!`, 'info');
-      }
     });
 
     socket.on('session:closed', ({ message }) => {
@@ -181,7 +170,6 @@ export default function GuestView() {
       socket.off('queue:validating');
       socket.off('queue:add:success');
       socket.off('queue:add:rejected');
-      socket.off('game:roundResults');
       socket.off('session:closed');
       socket.off('host:disconnected');
       socket.off('error');
@@ -239,28 +227,24 @@ export default function GuestView() {
     urlInputRef.current?.focus();
   }
 
-  function handleGuess(guessedGuestId) {
-    socketRef.current?.emit('game:guess', { guessedGuestId });
-    setHasGuessedCurrentTrack(true);
-  }
-
   // My active song count + dynamic limit from session
   const myGuest = session?.guests?.find((g) => g.id === myGuestId);
   const mySongCount = myGuest?.activeSongCount || 0;
   const atLimit = mySongCount >= songLimit;
 
-  const topGuessers = [...(session?.guests || [])]
-    .sort((a, b) => (b.score || 0) - (a.score || 0))
-    .filter(g => (g.score || 0) > 0)
-    .slice(0, 5);
-
-  const topRequesters = [...(session?.guests || [])]
-    .sort((a, b) => (b.totalRequestedSongs || 0) - (a.totalRequestedSongs || 0))
-    .filter(g => (g.totalRequestedSongs || 0) > 0)
-    .slice(0, 5);
-
   // ──── DEVICE BLOCKED SCREEN ────
   if (deviceBlocked) {
+    const handleResetDevice = () => {
+      // Hapus device ID lama dan buat yang baru — seolah perangkat baru
+      const KEY = 'ob_device_id';
+      const newId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem(KEY, newId);
+      // Hapus juga identity tersimpan untuk sesi ini
+      localStorage.removeItem(`ob_guest_${code}`);
+      // Reload halaman agar bisa join ulang
+      window.location.reload();
+    };
+
     return (
       <div className="guest-join-page">
         <div className="guest-join-bg">
@@ -276,9 +260,19 @@ export default function GuestView() {
             Perangkat ini sudah digunakan untuk bergabung ke sesi ini sebelumnya.
             Satu perangkat hanya boleh satu pengguna per sesi.
           </p>
-          <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => navigate('/')}>
+          <button className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }} onClick={() => navigate('/')}>
             Kembali ke Beranda
           </button>
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%', justifyContent: 'center' }}
+            onClick={handleResetDevice}
+          >
+            Pakai Perangkat Ini
+          </button>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, lineHeight: 1.6 }}>
+            Pengguna sebelumnya dari perangkat ini akan dikeluarkan dari sesi.
+          </p>
         </div>
       </div>
     );
@@ -404,56 +398,8 @@ export default function GuestView() {
           track={currentTrack}
           isPlaying={isPlaying}
           compact={true}
-          isGuessingGameEnabled={session?.isGuessingGameEnabled}
         />
       </div>
-
-      {/* Guessing Game UI */}
-      {session?.isGuessingGameEnabled && currentTrack && !hasGuessedCurrentTrack && (
-        <div className="guessing-game-card animate-slideIn">
-          <div className="guessing-game-glow"></div>
-          <div className="guessing-game-content">
-            {currentTrack.requestedBy === myGuestId ? (
-              <div className="guessing-own-track">
-                <span className="guessing-icon">🤫</span>
-                <h3>Ini Lagumu!</h3>
-                <p>Biarkan rekan-rekanmu menebak</p>
-              </div>
-            ) : (
-              <>
-                <h3 className="guessing-title">
-                  <span className="guessing-icon">🕵️</span>
-                  Tebak Siapa Yang Request?
-                </h3>
-                <div className="guessing-options">
-                  {session.guests.filter(g => g.id !== myGuestId).map(g => (
-                    <button key={g.id} className="guessing-btn" onClick={() => handleGuess(g.id)}>
-                      <div className="guessing-avatar" style={guestAvatarStyle(g.id)}>
-                        {g.nickname.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="guessing-name">{g.nickname}</span>
-                    </button>
-                  ))}
-                  {session.guests.filter(g => g.id !== myGuestId).length === 0 && (
-                    <p className="guessing-empty">Belum ada guest lain.</p>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-      {session?.isGuessingGameEnabled && currentTrack && hasGuessedCurrentTrack && currentTrack.requestedBy !== myGuestId && (
-        <div className="guessing-game-card success animate-slideIn">
-          <div className="guessing-success-content">
-            <span className="success-icon">✓</span>
-            <div className="success-text">
-              <p>Tebakanmu sudah direkam!</p>
-              <small>Menunggu lagu selesai...</small>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="guest-tabs">
@@ -486,16 +432,6 @@ export default function GuestView() {
           {session?.queue?.length > 0 && (
             <span className="tab-badge">{session.queue.length}</span>
           )}
-        </button>
-        <button
-          id="tab-leaderboard"
-          className={`guest-tab ${activeTab === 'leaderboard' ? 'active' : ''}`}
-          onClick={() => setActiveTab('leaderboard')}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-          </svg>
-          Klasemen
         </button>
       </div>
 
@@ -664,62 +600,7 @@ export default function GuestView() {
               queue={session?.queue || []}
               isHost={false}
               currentTrack={currentTrack}
-              isGuessingGameEnabled={session?.isGuessingGameEnabled}
             />
-          </div>
-        )}
-
-        {activeTab === 'leaderboard' && (
-          <div className="leaderboard-panel animate-fadeIn" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', padding: '0 var(--space-2)' }}>
-            <div>
-              <h3 style={{ fontSize: '1rem', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Top Requesters</h3>
-              {topRequesters.length === 0 ? (
-                <p className="empty-guests">Belum ada data request.</p>
-              ) : (
-                <ul className="guest-list" style={{ gap: '10px' }}>
-                  {topRequesters.map((g, i) => (
-                    <li key={g.id} className="guest-item" style={{ padding: '10px' }}>
-                      <div className="guest-avatar" style={{ width: '32px', height: '32px', fontSize: '0.9rem', ...guestAvatarStyle(g.id) }}>
-                        {g.nickname.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="guest-info" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="guest-name" style={{ fontSize: '1rem' }}>
-                          <span style={{color: 'var(--text-muted)', marginRight: '8px'}}>{i + 1}.</span> 
-                          {g.nickname}
-                          {g.id === myGuestId && <span style={{fontSize: '11px', color: 'var(--accent-primary)', marginLeft: '6px'}}>(Kamu)</span>}
-                        </span>
-                        <span className="badge badge-indigo" style={{ fontSize: '12px' }}>{g.totalRequestedSongs} lagu</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div>
-              <h3 style={{ fontSize: '1rem', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Top Guessers</h3>
-              {topGuessers.length === 0 ? (
-                <p className="empty-guests">Belum ada data tebakan benar.</p>
-              ) : (
-                <ul className="guest-list" style={{ gap: '10px' }}>
-                  {topGuessers.map((g, i) => (
-                    <li key={g.id} className="guest-item" style={{ padding: '10px' }}>
-                      <div className="guest-avatar" style={{ width: '32px', height: '32px', fontSize: '0.9rem', ...guestAvatarStyle(g.id) }}>
-                        {g.nickname.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="guest-info" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="guest-name" style={{ fontSize: '1rem' }}>
-                          <span style={{color: 'var(--text-muted)', marginRight: '8px'}}>{i + 1}.</span> 
-                          {g.nickname}
-                          {g.id === myGuestId && <span style={{fontSize: '11px', color: 'var(--accent-primary)', marginLeft: '6px'}}>(Kamu)</span>}
-                        </span>
-                        <span className="badge badge-emerald" style={{ fontSize: '12px' }}>{g.score} pts</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
           </div>
         )}
       </div>

@@ -795,6 +795,7 @@ export default function GuestView() {
               queue={session?.queue || []}
               isHost={false}
               currentTrack={currentTrack}
+              isGuessingGameEnabled={session?.isGuessingGameEnabled || false}
             />
           </div>
         )}

@@ -155,7 +155,7 @@ async function deleteSession(sessionId) {
 
 async function addGuestToSession(sessionId, guest) {
   return updateSession(sessionId, (session) => {
-    session.guests.push({ ...guest, activeSongCount: 0, score: 0, totalRequestedSongs: 0 });
+    session.guests.push({ ...guest, activeSongCount: 0, score: 0, totalRequestedSongs: 0, isOnline: true });
     if (guest.deviceId && !session.deviceIds.includes(guest.deviceId)) {
       session.deviceIds.push(guest.deviceId);
     }
@@ -268,6 +268,15 @@ async function updatePointsConfig(sessionId, correctGuessPoints, queueModifyCost
   });
 }
 
+async function updateGuestOnlineStatus(sessionId, guestId, isOnline) {
+  return updateSession(sessionId, (session) => {
+    const guest = session.guests.find((g) => g.id === guestId);
+    if (guest) {
+      guest.isOnline = isOnline;
+    }
+  });
+}
+
 // Auto-cleanup in-memory sessions (Redis handles its own TTL)
 if (!useRedis) {
   setInterval(() => {
@@ -298,4 +307,5 @@ module.exports = {
   toggleGuessingGame,
   recordGuess,
   updatePointsConfig,
+  updateGuestOnlineStatus,
 };

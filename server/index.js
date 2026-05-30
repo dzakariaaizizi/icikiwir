@@ -98,6 +98,8 @@ function sanitizeSession(session) {
     name: session.name,
     maxSongsPerGuest: session.maxSongsPerGuest || 3,
     isGuessingGameEnabled: session.isGuessingGameEnabled || false,
+    correctGuessPoints: session.correctGuessPoints !== undefined ? session.correctGuessPoints : 10,
+    queueModifyCost: session.queueModifyCost !== undefined ? session.queueModifyCost : 20,
     guests: (session.guests || []).map((g) => ({
       id: g.id,
       nickname: g.nickname,
@@ -384,6 +386,86 @@ io.on('connection', (socket) => {
       const updated = sanitizeSession(await store.getSession(sessionId));
       io.to(sessionId).emit('room:updated', updated);
     } catch (err) { console.error('[session:toggleGuessingGame]', err); }
+  });
+
+  socket.on('session:updatePointsConfig', async ({ correctGuessPoints, queueModifyCost }) => {
+    try {
+      if (socket.data.role !== 'host') return;
+      const { sessionId } = socket.data;
+      await store.updatePointsConfig(sessionId, correctGuessPoints, queueModifyCost);
+      const updated = sanitizeSession(await store.getSession(sessionId));
+      io.to(sessionId).emit('room:updated', updated);
+    } catch (err) { console.error('[session:updatePointsConfig]', err); }
+  });
+
+  socket.on('queue:move', async ({ trackId, direction }) => {
+    try {
+      if (socket.data.role !== 'guest') return;
+      const { sessionId, guestId, nickname } = socket.data;
+      if (!sessionId || !guestId || !trackId || !direction) return;
+
+      const session = await store.getSession(sessionId);
+      if (!session) return socket.emit('error', { message: 'Sesi tidak ditemukan.' });
+      if (!session.isGuessingGameEnabled) {
+        return socket.emit('error', { message: 'Fitur poin tidak aktif.' });
+      }
+
+      const guest = (session.guests || []).find((g) => g.id === guestId);
+      if (!guest) return socket.emit('error', { message: 'Kamu tidak terdaftar.' });
+
+      const cost = session.queueModifyCost !== undefined ? session.queueModifyCost : 20;
+      if ((guest.score || 0) < cost) {
+        return socket.emit('error', { message: `Poin tidak cukup. Butuh ${cost} poin.` });
+      }
+
+      // Cari track index
+      const queue = session.queue || [];
+      const trackIndex = queue.findIndex((t) => t.id === trackId);
+      if (trackIndex === -1) return socket.emit('error', { message: 'Lagu tidak ditemukan di antrian.' });
+
+      let targetIndex = -1;
+      if (direction === 'up') {
+        if (trackIndex === 0) return socket.emit('error', { message: 'Lagu sudah berada di posisi teratas.' });
+        targetIndex = trackIndex - 1;
+      } else if (direction === 'down') {
+        if (trackIndex === queue.length - 1) return socket.emit('error', { message: 'Lagu sudah berada di posisi terbawah.' });
+        targetIndex = trackIndex + 1;
+      } else {
+        return socket.emit('error', { message: 'Arah tidak valid.' });
+      }
+
+      const trackTitle = queue[trackIndex].title;
+
+      // Update state
+      await store.updateSession(sessionId, (s) => {
+        // Double check points inside updater for safety
+        const g = s.guests.find((x) => x.id === guestId);
+        if (!g || (g.score || 0) < cost) {
+          throw new Error('Poin tidak cukup.');
+        }
+        
+        // Swap
+        const temp = s.queue[trackIndex];
+        s.queue[trackIndex] = s.queue[targetIndex];
+        s.queue[targetIndex] = temp;
+
+        // Deduct points
+        g.score = (g.score || 0) - cost;
+      });
+
+      const updated = sanitizeSession(await store.getSession(sessionId));
+      io.to(sessionId).emit('room:updated', updated);
+      io.to(sessionId).emit('queue:moved', {
+        nickname,
+        trackTitle,
+        direction,
+        cost
+      });
+      console.log(`[Socket] Queue item "${trackTitle}" moved ${direction} by ${nickname} for ${cost} pts`);
+    } catch (err) {
+      console.error('[queue:move]', err);
+      socket.emit('error', { message: err.message || 'Gagal memindahkan lagu.' });
+    }
   });
 
   socket.on('guest:guess', async ({ guessedGuestId }) => {

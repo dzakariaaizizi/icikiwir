@@ -17,7 +17,15 @@ export function Waveform({ playing = true, size = 'md' }) {
 /**
  * NowPlaying card — shared between host and guest views
  */
-export function NowPlaying({ track, isPlaying, progress = 0, duration = 0, compact = false, isGuessingGameEnabled = false }) {
+export function NowPlaying({
+  track,
+  isPlaying,
+  progress = 0,
+  duration = 0,
+  compact = false,
+  isGuessingGameEnabled = false,
+  hasQueue = false
+}) {
   const progressPct = duration > 0 ? Math.min((progress / duration) * 100, 100) : 0;
 
   const formatTime = (sec) => {
@@ -31,9 +39,11 @@ export function NowPlaying({ track, isPlaying, progress = 0, duration = 0, compa
     return (
       <div className={`now-playing-empty ${compact ? 'compact' : ''}`}>
         <div className="empty-icon">🎵</div>
-        <p className="empty-text">Antrian kosong</p>
+        <p className="empty-text">{hasQueue ? 'Belum ada lagu diputar' : 'Antrian kosong'}</p>
         <p className="empty-sub">
-          {compact ? 'Belum ada lagu' : 'Tambahkan lagu untuk mulai. Minta rekan kerjamu scan QR code!'}
+          {hasQueue
+            ? 'Menunggu host memulai pemutaran'
+            : (compact ? 'Belum ada lagu' : 'Tambahkan lagu untuk mulai. Minta rekan kerjamu scan QR code!')}
         </p>
       </div>
     );

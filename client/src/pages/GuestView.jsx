@@ -514,6 +514,7 @@ export default function GuestView() {
           isPlaying={isPlaying}
           compact={true}
           isGuessingGameEnabled={session?.isGuessingGameEnabled || false}
+          hasQueue={(session?.queue || []).length > 0}
         />
       </div>
 

@@ -140,34 +140,34 @@ io.on('connection', (socket) => {
   console.log(`[Socket] Connected: ${socket.id}`);
 
   // ── HOST: Register as host for a session ──
-  socket.on('host:register', ({ sessionId }) => {
-    const session = store.getSession(sessionId);
+  socket.on('host:register', async ({ sessionId }) => {
+    const session = await store.getSession(sessionId);
     if (!session) return socket.emit('error', { message: 'Sesi tidak ditemukan.' });
 
-    store.updateSession(sessionId, (s) => { s.hostSocketId = socket.id; });
+    await store.updateSession(sessionId, (s) => { s.hostSocketId = socket.id; });
     socket.join(sessionId);
     socket.data.role = 'host';
     socket.data.sessionId = sessionId;
 
     socket.emit('host:registered', {
-      session: sanitizeSession(store.getSession(sessionId)),
+      session: sanitizeSession(await store.getSession(sessionId)),
     });
     console.log(`[Socket] Host registered for session ${session.code}`);
   });
 
   // ── HOST: Re-register after reconnect (mobile background / network switch) ──
-  socket.on('host:reconnect', ({ sessionId }) => {
-    const session = store.getSession(sessionId);
+  socket.on('host:reconnect', async ({ sessionId }) => {
+    const session = await store.getSession(sessionId);
     if (!session) return socket.emit('error', { message: 'Sesi tidak ditemukan atau sudah berakhir.' });
 
-    store.updateSession(sessionId, (s) => { s.hostSocketId = socket.id; });
+    await store.updateSession(sessionId, (s) => { s.hostSocketId = socket.id; });
     socket.join(sessionId);
     socket.data.role = 'host';
     socket.data.sessionId = sessionId;
 
     // Send full session state so host can recover playback position
     socket.emit('host:reconnected', {
-      session: sanitizeSession(store.getSession(sessionId)),
+      session: sanitizeSession(await store.getSession(sessionId)),
     });
     console.log(`[Socket] Host RE-connected for session ${session.code}`);
   });
@@ -387,14 +387,17 @@ function sanitizeSession(session) {
     code: session.code,
     name: session.name,
     maxSongsPerGuest: session.maxSongsPerGuest || 3,
-    guests: session.guests.map((g) => ({
+    guests: (session.guests || []).map((g) => ({
       id: g.id,
       nickname: g.nickname,
-      activeSongCount: g.activeSongCount,
+      activeSongCount: g.activeSongCount || 0,
+      score: g.score || 0,
+      totalRequestedSongs: g.totalRequestedSongs || 0,
     })),
-    queue: session.queue,
-    currentTrack: session.currentTrack,
-    isPlaying: session.isPlaying,
+    queue: session.queue || [],
+    currentTrack: session.currentTrack || null,
+    isPlaying: session.isPlaying || false,
+    isGuessingGameEnabled: session.isGuessingGameEnabled || false,
   };
 }
 

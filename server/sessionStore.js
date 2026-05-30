@@ -105,6 +105,8 @@ async function createSession({ name, hostSocketId }) {
     deviceIds: [],
     isGuessingGameEnabled: false,
     currentGuesses: {},
+    correctGuessPoints: 10,
+    queueModifyCost: 20,
     createdAt: Date.now(),
     lastActivityAt: Date.now(),
   };
@@ -221,7 +223,7 @@ async function dequeueNext(sessionId) {
           if (guessedId === correctRequesterId) {
             correctGuessers.push(guesserId);
             const guesser = session.guests.find(g => g.id === guesserId);
-            if (guesser) guesser.score = (guesser.score || 0) + 10;
+            if (guesser) guesser.score = (guesser.score || 0) + (session.correctGuessPoints || 10);
           }
         }
         roundResults = {
@@ -259,6 +261,13 @@ async function recordGuess(sessionId, guestId, guessedGuestId) {
   });
 }
 
+async function updatePointsConfig(sessionId, correctGuessPoints, queueModifyCost) {
+  return updateSession(sessionId, (session) => {
+    session.correctGuessPoints = Math.max(1, Number(correctGuessPoints) || 10);
+    session.queueModifyCost = Math.max(1, Number(queueModifyCost) || 20);
+  });
+}
+
 // Auto-cleanup in-memory sessions (Redis handles its own TTL)
 if (!useRedis) {
   setInterval(() => {
@@ -288,4 +297,5 @@ module.exports = {
   updateSongLimit,
   toggleGuessingGame,
   recordGuess,
+  updatePointsConfig,
 };

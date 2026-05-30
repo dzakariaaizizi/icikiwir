@@ -467,6 +467,17 @@ export default function GuestView() {
             <span className="tab-badge">{session.queue.length}</span>
           )}
         </button>
+        <button
+          id="tab-leaderboard"
+          className={`guest-tab ${activeTab === 'leaderboard' ? 'active' : ''}`}
+          onClick={() => setActiveTab('leaderboard')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+            <polyline points="17 6 23 6 23 12" />
+          </svg>
+          Klasemen
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -635,6 +646,64 @@ export default function GuestView() {
               isHost={false}
               currentTrack={currentTrack}
             />
+          </div>
+        )}
+
+        {activeTab === 'leaderboard' && (
+          <div className="queue-panel animate-fadeIn" style={{ padding: '16px' }}>
+            {/* Top Requesters */}
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                🎵 Top Requesters
+              </h4>
+              {(session?.guests || []).filter(g => (g.totalRequestedSongs || 0) > 0).length === 0 ? (
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '16px 0' }}>Belum ada data.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {[...(session?.guests || [])]
+                    .sort((a, b) => (b.totalRequestedSongs || 0) - (a.totalRequestedSongs || 0))
+                    .filter(g => (g.totalRequestedSongs || 0) > 0)
+                    .slice(0, 5)
+                    .map((g, i) => (
+                      <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px' }}>
+                        <span style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {g.nickname}
+                          {g.id === myGuestId && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '0.75rem' }}>(kamu)</span>}
+                        </span>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 600 }}>{g.totalRequestedSongs} lagu</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {/* Top Guessers — only show if guessing game enabled */}
+            {session?.isGuessingGameEnabled && (
+              <div>
+                <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  🎯 Top Guessers
+                </h4>
+                {(session?.guests || []).filter(g => (g.score || 0) > 0).length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '16px 0' }}>Belum ada yang menebak.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {[...(session?.guests || [])]
+                      .sort((a, b) => (b.score || 0) - (a.score || 0))
+                      .filter(g => (g.score || 0) > 0)
+                      .slice(0, 5)
+                      .map((g, i) => (
+                        <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px' }}>
+                          <span style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                            {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {g.nickname}
+                            {g.id === myGuestId && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '0.75rem' }}>(kamu)</span>}
+                          </span>
+                          <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 600 }}>{g.score} pts</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

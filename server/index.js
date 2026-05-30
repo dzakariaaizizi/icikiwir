@@ -6,12 +6,11 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
-const path = require('path');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { validateYouTubeUrl } = require('./youtubeValidator');
-const store = require('./sessionStore');
-const { isDeviceRegistered, updateSongLimit, toggleGuessingGame, recordGuess } = require('./sessionStore');
+const store = require('./sessionStore');  // Redis-backed
+const { isDeviceRegistered, updateSongLimit } = require('./sessionStore');
 
 const app = express();
 const server = http.createServer(app);
@@ -39,6 +38,11 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Serve React client build
+const path = require('path');
+const clientDist = path.join(__dirname, '../client/dist');
+app.use(express.static(clientDist));
+
 // ──────────────────────────────────────────────
 // REST API
 // ──────────────────────────────────────────────
@@ -46,10 +50,10 @@ app.use(express.json());
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: Date.now() }));
 
 /** POST /api/session — Create a new session (host) */
-app.post('/api/session', (req, res) => {
+app.post('/api/session', async (req, res) => {
   const { name } = req.body;
   // hostSocketId will be updated when socket connects
-  const session = store.createSession({ name: name || 'icikiwir', hostSocketId: null });
+  const session = await store.createSession({ name: name || 'icikiwir', hostSocketId: null });
   res.json({
     sessionId: session.id,
     code: session.code,
@@ -58,8 +62,8 @@ app.post('/api/session', (req, res) => {
 });
 
 /** GET /api/session/:code — Get session info by code */
-app.get('/api/session/:code', (req, res) => {
-  const session = store.getSessionByCode(req.params.code.toUpperCase());
+app.get('/api/session/:code', async (req, res) => {
+  const session = await store.getSessionByCode(req.params.code.toUpperCase());
   if (!session) return res.status(404).json({ error: 'Sesi tidak ditemukan. Periksa kode lagi.' });
   res.json({
     sessionId: session.id,
@@ -96,45 +100,81 @@ function generateRandomNickname() {
   return `${adjectives[Math.floor(Math.random() * adjectives.length)]}${nouns[Math.floor(Math.random() * nouns.length)]}`;
 }
 
+// ── Server-side playback timer ─────────────────────────────────────────────
+// Tracks a setTimeout per session so the server advances the queue automatically
+// even when the host's browser is in the background and the socket is throttled.
+const playbackTimers = new Map(); // sessionId → timeoutId
+
+function clearPlaybackTimer(sessionId) {
+  if (playbackTimers.has(sessionId)) {
+    clearTimeout(playbackTimers.get(sessionId));
+    playbackTimers.delete(sessionId);
+  }
+}
+
+function scheduleNextTrack(sessionId, durationSeconds) {
+  clearPlaybackTimer(sessionId);
+  if (!durationSeconds || durationSeconds <= 0) return;
+
+  const ms = (durationSeconds + 3) * 1000; // +3s buffer
+  const timerId = setTimeout(async () => {
+    playbackTimers.delete(sessionId);
+    const { nextTrack: next } = await store.dequeueNext(sessionId);
+    const session = await store.getSession(sessionId);
+    if (!session) return;
+    const sanitized = sanitizeSession(session);
+    io.to(sessionId).emit('room:updated', sanitized);
+    io.to(sessionId).emit('playback:next', { track: next });
+    console.log(`[Timer] Auto-advanced track for session ${sessionId}`);
+
+    // If there's a next track and it has duration, schedule the one after
+    if (next?.duration) scheduleNextTrack(sessionId, next.duration);
+  }, ms);
+
+  playbackTimers.set(sessionId, timerId);
+  console.log(`[Timer] Scheduled next track in ${ms / 1000}s for session ${sessionId}`);
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 io.on('connection', (socket) => {
   console.log(`[Socket] Connected: ${socket.id}`);
 
   // ── HOST: Register as host for a session ──
-  socket.on('host:register', ({ sessionId }) => {
-    const session = store.getSession(sessionId);
+  socket.on('host:register', async ({ sessionId }) => {
+    const session = await store.getSession(sessionId);
     if (!session) return socket.emit('error', { message: 'Sesi tidak ditemukan.' });
 
-    store.updateSession(sessionId, (s) => { s.hostSocketId = socket.id; });
+    await store.updateSession(sessionId, (s) => { s.hostSocketId = socket.id; });
     socket.join(sessionId);
     socket.data.role = 'host';
     socket.data.sessionId = sessionId;
 
     socket.emit('host:registered', {
-      session: sanitizeSession(store.getSession(sessionId)),
+      session: sanitizeSession(await store.getSession(sessionId)),
     });
     console.log(`[Socket] Host registered for session ${session.code}`);
   });
 
   // ── HOST: Re-register after reconnect (mobile background / network switch) ──
-  socket.on('host:reconnect', ({ sessionId }) => {
-    const session = store.getSession(sessionId);
+  socket.on('host:reconnect', async ({ sessionId }) => {
+    const session = await store.getSession(sessionId);
     if (!session) return socket.emit('error', { message: 'Sesi tidak ditemukan atau sudah berakhir.' });
 
-    store.updateSession(sessionId, (s) => { s.hostSocketId = socket.id; });
+    await store.updateSession(sessionId, (s) => { s.hostSocketId = socket.id; });
     socket.join(sessionId);
     socket.data.role = 'host';
     socket.data.sessionId = sessionId;
 
     // Send full session state so host can recover playback position
     socket.emit('host:reconnected', {
-      session: sanitizeSession(store.getSession(sessionId)),
+      session: sanitizeSession(await store.getSession(sessionId)),
     });
     console.log(`[Socket] Host RE-connected for session ${session.code}`);
   });
 
   // ── GUEST: Join a session ──
-  socket.on('guest:join', ({ code, nickname, deviceId }) => {
-    const session = store.getSessionByCode(code);
+  socket.on('guest:join', async ({ code, nickname, deviceId }) => {
+    const session = await store.getSessionByCode(code);
     if (!session) return socket.emit('error', { message: 'Kode sesi tidak valid. Coba lagi.' });
 
     // Device fingerprint check — one user per device per session
@@ -147,7 +187,7 @@ io.on('connection', (socket) => {
     const finalNickname = (nickname || '').trim() || generateRandomNickname();
     const guestId = generateGuestId();
 
-    store.addGuestToSession(session.id, {
+    await store.addGuestToSession(session.id, {
       id: guestId,
       nickname: finalNickname,
       socketId: socket.id,
@@ -161,7 +201,7 @@ io.on('connection', (socket) => {
     socket.data.nickname = finalNickname;
     socket.data.deviceId = deviceId || null;
 
-    const fullSession = sanitizeSession(store.getSession(session.id));
+    const fullSession = sanitizeSession(await store.getSession(session.id));
 
     // Confirm to guest
     socket.emit('guest:joined', {
@@ -179,7 +219,7 @@ io.on('connection', (socket) => {
   socket.on('queue:add', async ({ url }) => {
     if (socket.data.role !== 'guest') return;
     const { sessionId, guestId, nickname } = socket.data;
-    const session = store.getSession(sessionId);
+    const session = await store.getSession(sessionId);
     if (!session) return socket.emit('error', { message: 'Sesi tidak ditemukan.' });
 
     // Check guest song limit (dynamic per session)
@@ -210,8 +250,8 @@ io.on('connection', (socket) => {
       addedAt: Date.now(),
     };
 
-    store.addTrackToQueue(sessionId, track);
-    const updatedSession = sanitizeSession(store.getSession(sessionId));
+    await store.addTrackToQueue(sessionId, track);
+    const updatedSession = sanitizeSession(await store.getSession(sessionId));
 
     socket.emit('queue:add:success', { track });
     io.to(sessionId).emit('room:updated', updatedSession);
@@ -219,112 +259,101 @@ io.on('connection', (socket) => {
   });
 
   // ── HOST: Remove a track from queue ──
-  socket.on('queue:remove', ({ trackId }) => {
+  socket.on('queue:remove', async ({ trackId }) => {
     if (socket.data.role !== 'host') return;
     const { sessionId } = socket.data;
-    store.removeTrackFromQueue(sessionId, trackId);
-    io.to(sessionId).emit('room:updated', sanitizeSession(store.getSession(sessionId)));
+    await store.removeTrackFromQueue(sessionId, trackId);
+    io.to(sessionId).emit('room:updated', sanitizeSession(await store.getSession(sessionId)));
+  });
+
+  // ── HOST: Track started — client sends duration so server can auto-advance ──
+  socket.on('playback:started', async ({ duration }) => {
+    if (socket.data.role !== 'host') return;
+    const { sessionId } = socket.data;
+    if (duration && duration > 0) {
+      scheduleNextTrack(sessionId, duration);
+    }
   });
 
   // ── HOST: Skip current track ──
-  socket.on('playback:skip', () => {
+  socket.on('playback:skip', async () => {
     if (socket.data.role !== 'host') return;
     const { sessionId } = socket.data;
-    const { nextTrack, roundResults } = store.dequeueNext(sessionId);
-    const session = sanitizeSession(store.getSession(sessionId));
+    clearPlaybackTimer(sessionId); // cancel server timer
+    const { nextTrack: next, roundResults } = await store.dequeueNext(sessionId);
+    const session = sanitizeSession(await store.getSession(sessionId));
     io.to(sessionId).emit('room:updated', session);
-    if (roundResults) {
-      io.to(sessionId).emit('game:roundResults', roundResults);
-    }
-    io.to(sessionId).emit('playback:next', { track: nextTrack });
+    if (roundResults) io.to(sessionId).emit('game:roundResults', roundResults);
+    io.to(sessionId).emit('playback:next', { track: next });
   });
 
-  // ── HOST: Track ended (auto-advance) ──
-  socket.on('playback:ended', () => {
+  // ── HOST: Track ended — fallback jika client masih bisa emit ──
+  socket.on('playback:ended', async () => {
     if (socket.data.role !== 'host') return;
     const { sessionId } = socket.data;
-    const { nextTrack, roundResults } = store.dequeueNext(sessionId);
-    const session = sanitizeSession(store.getSession(sessionId));
+    clearPlaybackTimer(sessionId); // cancel server timer agar tidak double-advance
+    const { nextTrack: next, roundResults } = await store.dequeueNext(sessionId);
+    const session = sanitizeSession(await store.getSession(sessionId));
     io.to(sessionId).emit('room:updated', session);
-    if (roundResults) {
-      io.to(sessionId).emit('game:roundResults', roundResults);
-    }
-    io.to(sessionId).emit('playback:next', { track: nextTrack });
+    if (roundResults) io.to(sessionId).emit('game:roundResults', roundResults);
+    io.to(sessionId).emit('playback:next', { track: next });
   });
 
   // ── HOST: Sync playback state to guests ──
-  socket.on('playback:state', ({ isPlaying, currentTime }) => {
+  socket.on('playback:state', async ({ isPlaying, currentTime }) => {
     if (socket.data.role !== 'host') return;
     const { sessionId } = socket.data;
-    store.updateSession(sessionId, (s) => { s.isPlaying = isPlaying; });
+    await store.updateSession(sessionId, (s) => { s.isPlaying = isPlaying; });
     socket.to(sessionId).emit('playback:state', { isPlaying, currentTime });
   });
 
   // ── HOST: Start playing (set first track from queue) ──
-  socket.on('playback:start', () => {
+  socket.on('playback:start', async () => {
     if (socket.data.role !== 'host') return;
     const { sessionId } = socket.data;
-    const session = store.getSession(sessionId);
+    const session = await store.getSession(sessionId);
     if (!session) return;
 
     if (!session.currentTrack && session.queue.length > 0) {
-      const { nextTrack, roundResults } = store.dequeueNext(sessionId);
-      const updatedSession = sanitizeSession(store.getSession(sessionId));
+      const next = await store.dequeueNext(sessionId);
+      const updatedSession = sanitizeSession(await store.getSession(sessionId));
       io.to(sessionId).emit('room:updated', updatedSession);
-      if (roundResults) {
-        io.to(sessionId).emit('game:roundResults', roundResults);
-      }
-      io.to(sessionId).emit('playback:next', { track: nextTrack });
+      io.to(sessionId).emit('playback:next', { track: next });
     } else {
-      store.updateSession(sessionId, (s) => { s.isPlaying = true; });
+      await store.updateSession(sessionId, (s) => { s.isPlaying = true; });
       io.to(sessionId).emit('playback:state', { isPlaying: true, currentTime: 0 });
     }
   });
 
   // ── HOST: Set song limit per guest ──
-  socket.on('session:setLimit', ({ limit }) => {
+  socket.on('session:setLimit', async ({ limit }) => {
     if (socket.data.role !== 'host') return;
     const { sessionId } = socket.data;
     const newLimit = Math.max(1, Math.min(10, Number(limit)));
     updateSongLimit(sessionId, newLimit);
-    const session = sanitizeSession(store.getSession(sessionId));
+    const session = sanitizeSession(await store.getSession(sessionId));
     io.to(sessionId).emit('room:updated', session);
     console.log(`[Socket] Song limit set to ${newLimit} for session ${sessionId}`);
   });
 
-  // ── HOST: Toggle guessing game ──
-  socket.on('session:toggleGuessingGame', ({ enabled }) => {
-    if (socket.data.role !== 'host') return;
-    const { sessionId } = socket.data;
-    toggleGuessingGame(sessionId, enabled);
-    const session = sanitizeSession(store.getSession(sessionId));
-    io.to(sessionId).emit('room:updated', session);
-  });
-
-  // ── GUEST: Record guess ──
-  socket.on('game:guess', ({ guessedGuestId }) => {
-    if (socket.data.role !== 'guest') return;
-    const { sessionId, guestId } = socket.data;
-    recordGuess(sessionId, guestId, guessedGuestId);
-  });
-
   // ── HOST: Close session ──
-  socket.on('session:close', () => {
+  socket.on('session:close', async () => {
     if (socket.data.role !== 'host') return;
     const { sessionId } = socket.data;
+    clearPlaybackTimer(sessionId); // cancel any pending timer
     io.to(sessionId).emit('session:closed', { message: 'Host telah menutup sesi.' });
-    store.deleteSession(sessionId);
+    await store.deleteSession(sessionId);
     io.in(sessionId).socketsLeave(sessionId);
   });
 
   // ── DISCONNECT ──
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     const { role, sessionId, guestId, nickname } = socket.data || {};
     if (!sessionId) return;
 
     if (role === 'guest' && guestId) {
-      store.removeGuestFromSession(sessionId, guestId);
-      const session = store.getSession(sessionId);
+      await store.removeGuestFromSession(sessionId, guestId);
+      const session = await store.getSession(sessionId);
       if (session) {
         io.to(sessionId).emit('room:updated', sanitizeSession(session));
         io.to(sessionId).emit('guest:left', { guestId, nickname });
@@ -343,19 +372,15 @@ io.on('connection', (socket) => {
 /** Strip sensitive data before sending to clients */
 function sanitizeSession(session) {
   if (!session) return null;
-  
   return {
     id: session.id,
     code: session.code,
     name: session.name,
     maxSongsPerGuest: session.maxSongsPerGuest || 3,
-    isGuessingGameEnabled: session.isGuessingGameEnabled || false,
     guests: session.guests.map((g) => ({
       id: g.id,
       nickname: g.nickname,
       activeSongCount: g.activeSongCount,
-      score: g.score || 0,
-      totalRequestedSongs: g.totalRequestedSongs || 0,
     })),
     queue: session.queue,
     currentTrack: session.currentTrack,
@@ -363,17 +388,10 @@ function sanitizeSession(session) {
   };
 }
 
-// ──────────────────────────────────────────────
-// Static Frontend (for Production)
-// ──────────────────────────────────────────────
-
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/dist')));
-  // SPA fallback
-  app.use((req, res) => {
-    res.sendFile(path.join(__dirname, '../client/dist', 'index.html'));
-  });
-}
+// Catchall — semua route yang bukan /api atau /health dilayani oleh React
+app.get(/^(?!\/api|\/health).*$/, (req, res) => {
+  res.sendFile(path.join(clientDist, 'index.html'));
+});
 
 // ──────────────────────────────────────────────
 // Start Server

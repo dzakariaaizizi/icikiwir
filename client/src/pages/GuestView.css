@@ -506,21 +506,14 @@
   position: relative;
   margin: var(--space-4) var(--space-4) 0;
   border-radius: var(--radius-xl);
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: none;
+  border: none;
   overflow: hidden;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
 }
 
 .guessing-game-glow {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
-  opacity: 0.8;
-  animation: shimmer 2s infinite;
+  display: none;
 }
 
 .guessing-game-content {
@@ -614,8 +607,8 @@
 }
 
 .guessing-game-card.success {
-  background: rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.3);
+  background: none;
+  border: none;
 }
 
 .guessing-success-content {

@@ -131,7 +131,7 @@ async function scheduleNextTrack(sessionId, durationSeconds) {
     const session = await store.getSession(sessionId);
     if (!session) return;
     io.to(sessionId).emit('room:updated', sanitizeSession(session));
-    io.to(sessionId).emit('playback:next', { track: nextTrack });
+    io.to(sessionId).emit('playback:next', { track: nextTrack, completed: true });
     console.log(`[Timer] Auto-advanced for session ${sessionId}`);
     if (nextTrack?.duration) scheduleNextTrack(sessionId, nextTrack.duration);
   }, ms);
@@ -321,7 +321,7 @@ io.on('connection', (socket) => {
       const { nextTrack } = await store.dequeueNext(sessionId);
       const updated = sanitizeSession(await store.getSession(sessionId));
       io.to(sessionId).emit('room:updated', updated);
-      io.to(sessionId).emit('playback:next', { track: nextTrack });
+      io.to(sessionId).emit('playback:next', { track: nextTrack, completed: false });
     } catch (err) { console.error('[playback:skip]', err); }
   });
 
@@ -334,7 +334,7 @@ io.on('connection', (socket) => {
       const updated = sanitizeSession(await store.getSession(sessionId));
       io.to(sessionId).emit('room:updated', updated);
       if (roundResults) io.to(sessionId).emit('game:roundResults', roundResults);
-      io.to(sessionId).emit('playback:next', { track: nextTrack });
+      io.to(sessionId).emit('playback:next', { track: nextTrack, completed: true });
     } catch (err) { console.error('[playback:ended]', err); }
   });
 
@@ -357,7 +357,7 @@ io.on('connection', (socket) => {
         const { nextTrack } = await store.dequeueNext(sessionId);
         const updated = sanitizeSession(await store.getSession(sessionId));
         io.to(sessionId).emit('room:updated', updated);
-        io.to(sessionId).emit('playback:next', { track: nextTrack });
+        io.to(sessionId).emit('playback:next', { track: nextTrack, completed: false });
       } else {
         await store.updateSession(sessionId, (s) => { s.isPlaying = true; });
         io.to(sessionId).emit('playback:state', { isPlaying: true, currentTime: 0 });

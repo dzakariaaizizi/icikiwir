@@ -23,6 +23,8 @@ export default function HostDashboard() {
   const [connected, setConnected] = useState(false);
   const [songLimit, setSongLimit] = useState(3);   // Admin-controlled max songs per guest
   const [isGuessingGameEnabled, setIsGuessingGameEnabled] = useState(false);
+  const [correctGuessPoints, setCorrectGuessPoints] = useState(10);
+  const [queueModifyCost, setQueueModifyCost] = useState(20);
   const [activeTab, setActiveTab] = useState('queue');
 
   const socketRef           = useRef(null);
@@ -144,6 +146,8 @@ export default function HostDashboard() {
       setSession(session);
       setSongLimit(session.maxSongsPerGuest || 3);
       setIsGuessingGameEnabled(session.isGuessingGameEnabled || false);
+      setCorrectGuessPoints(session.correctGuessPoints !== undefined ? session.correctGuessPoints : 10);
+      setQueueModifyCost(session.queueModifyCost !== undefined ? session.queueModifyCost : 20);
       if (session.currentTrack) {
         setCurrentTrack(session.currentTrack);
         setIsPlaying(session.isPlaying);
@@ -155,6 +159,8 @@ export default function HostDashboard() {
       setSession(session);
       setSongLimit(session.maxSongsPerGuest || 3);
       setIsGuessingGameEnabled(session.isGuessingGameEnabled || false);
+      setCorrectGuessPoints(session.correctGuessPoints !== undefined ? session.correctGuessPoints : 10);
+      setQueueModifyCost(session.queueModifyCost !== undefined ? session.queueModifyCost : 20);
       addToast('Koneksi pulih ✓', 'info');
 
       if (session.currentTrack) {
@@ -175,6 +181,8 @@ export default function HostDashboard() {
       if (session.currentTrack) setCurrentTrack(session.currentTrack);
       if (session.maxSongsPerGuest) setSongLimit(session.maxSongsPerGuest);
       setIsGuessingGameEnabled(session.isGuessingGameEnabled || false);
+      if (session.correctGuessPoints !== undefined) setCorrectGuessPoints(session.correctGuessPoints);
+      if (session.queueModifyCost !== undefined) setQueueModifyCost(session.queueModifyCost);
     });
 
     // ── Core fix for background track advance ──────────────────────────────
@@ -215,6 +223,10 @@ export default function HostDashboard() {
       }
     });
 
+    socket.on('queue:moved', ({ nickname, trackTitle, direction, cost }) => {
+      addToast(`${nickname} membayar ${cost} poin untuk ${direction === 'up' ? 'menaikkan' : 'menurunkan'} lagu "${trackTitle}"`, 'success');
+    });
+
     socket.on('error', ({ message }) => {
       addToast(message, 'error');
     });
@@ -228,6 +240,7 @@ export default function HostDashboard() {
       socket.off('room:updated');
       socket.off('playback:next');
       socket.off('guest:left');
+      socket.off('queue:moved');
       socket.off('error');
       disconnectSocket();
     };
@@ -277,6 +290,14 @@ export default function HostDashboard() {
     socketRef.current?.emit('session:toggleGuessingGame', { enabled: newVal });
     addToast(`Mode Tebak Request ${newVal ? 'diaktifkan' : 'dinonaktifkan'}`, 'info');
   }, [isGuessingGameEnabled]);
+
+  const handleSetPointsConfig = useCallback((points, cost) => {
+    const clampedPoints = Math.max(1, points);
+    const clampedCost = Math.max(1, cost);
+    setCorrectGuessPoints(clampedPoints);
+    setQueueModifyCost(clampedCost);
+    socketRef.current?.emit('session:updatePointsConfig', { correctGuessPoints: clampedPoints, queueModifyCost: clampedCost });
+  }, []);
 
   const handleCloseSession = () => {
     if (window.confirm('Tutup sesi? Semua guest akan terputus.')) {
@@ -509,6 +530,77 @@ export default function HostDashboard() {
               </div>
               <p className="limit-desc">Sembunyikan nama peminta lagu dan biarkan guest menebak</p>
             </div>
+
+            {/* Points Config Control */}
+            {isGuessingGameEnabled && (
+              <div style={{ marginTop: 'var(--space-4)', borderTop: '1px solid var(--border)', paddingTop: 'var(--space-4)' }}>
+                <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Pengaturan Poin
+                </h4>
+                
+                {/* Correct Guess Points */}
+                <div className="song-limit-control" style={{ marginBottom: '12px' }}>
+                  <div className="limit-header">
+                    <span className="limit-title">Poin Tebak Benar</span>
+                    <span className="limit-value-badge">{correctGuessPoints} pts</span>
+                  </div>
+                  <div className="limit-slider-row">
+                    <button
+                      className="limit-btn"
+                      onClick={() => handleSetPointsConfig(correctGuessPoints - 5, queueModifyCost)}
+                      disabled={correctGuessPoints <= 5}
+                      aria-label="Kurangi poin"
+                    >−</button>
+                    <input
+                      type="range"
+                      min="5"
+                      max="50"
+                      step="5"
+                      value={correctGuessPoints}
+                      onChange={(e) => handleSetPointsConfig(Number(e.target.value), queueModifyCost)}
+                      className="limit-slider"
+                    />
+                    <button
+                      className="limit-btn"
+                      onClick={() => handleSetPointsConfig(correctGuessPoints + 5, queueModifyCost)}
+                      disabled={correctGuessPoints >= 50}
+                      aria-label="Tambah poin"
+                    >+</button>
+                  </div>
+                </div>
+
+                {/* Queue Modify Cost */}
+                <div className="song-limit-control">
+                  <div className="limit-header">
+                    <span className="limit-title">Biaya Ubah Antrian</span>
+                    <span className="limit-value-badge">{queueModifyCost} pts</span>
+                  </div>
+                  <div className="limit-slider-row">
+                    <button
+                      className="limit-btn"
+                      onClick={() => handleSetPointsConfig(correctGuessPoints, queueModifyCost - 5)}
+                      disabled={queueModifyCost <= 5}
+                      aria-label="Kurangi biaya"
+                    >−</button>
+                    <input
+                      type="range"
+                      min="5"
+                      max="100"
+                      step="5"
+                      value={queueModifyCost}
+                      onChange={(e) => handleSetPointsConfig(correctGuessPoints, Number(e.target.value))}
+                      className="limit-slider"
+                    />
+                    <button
+                      className="limit-btn"
+                      onClick={() => handleSetPointsConfig(correctGuessPoints, queueModifyCost + 5)}
+                      disabled={queueModifyCost >= 100}
+                      aria-label="Tambah biaya"
+                    >+</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Leaderboard */}

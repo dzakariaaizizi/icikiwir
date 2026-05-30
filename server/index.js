@@ -50,10 +50,10 @@ app.use(express.static(clientDist));
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: Date.now() }));
 
 /** POST /api/session — Create a new session (host) */
-app.post('/api/session', (req, res) => {
+app.post('/api/session', async (req, res) => {
   const { name } = req.body;
   // hostSocketId will be updated when socket connects
-  const session = store.createSession({ name: name || 'icikiwir', hostSocketId: null });
+  const session = await store.createSession({ name: name || 'icikiwir', hostSocketId: null });
   res.json({
     sessionId: session.id,
     code: session.code,
@@ -62,14 +62,14 @@ app.post('/api/session', (req, res) => {
 });
 
 /** GET /api/session/:code — Get session info by code */
-app.get('/api/session/:code', (req, res) => {
-  const session = store.getSessionByCode(req.params.code.toUpperCase());
+app.get('/api/session/:code', async (req, res) => {
+  const session = await store.getSessionByCode(req.params.code.toUpperCase());
   if (!session) return res.status(404).json({ error: 'Sesi tidak ditemukan. Periksa kode lagi.' });
   res.json({
     sessionId: session.id,
     code: session.code,
     name: session.name,
-    guestCount: session.guests.length,
+    guestCount: (session.guests || []).length,
     isActive: true,
   });
 });

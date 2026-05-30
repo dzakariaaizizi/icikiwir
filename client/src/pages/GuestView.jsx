@@ -148,10 +148,10 @@ export default function GuestView() {
       }
     });
 
-    socket.on('playback:next', ({ track }) => {
+    socket.on('playback:next', ({ track, completed }) => {
       // Simpan lagu yang baru selesai ke history sebelum ganti
       setCurrentTrack((prev) => {
-        if (prev) {
+        if (prev && completed) {
           setPlayHistory((h) => [{ ...prev, playedAt: Date.now() }, ...h].slice(0, 50));
         }
         return track;

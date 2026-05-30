@@ -105,6 +105,11 @@ export default function GuestView() {
 
   const socketRef = useRef(null);
   const urlInputRef = useRef(null);
+  const currentTrackRef = useRef(null);
+
+  useEffect(() => {
+    currentTrackRef.current = currentTrack;
+  }, [currentTrack]);
 
   // Socket connection
   useEffect(() => {
@@ -161,12 +166,16 @@ export default function GuestView() {
 
     socket.on('playback:next', ({ track, completed }) => {
       // Simpan lagu yang baru selesai ke history sebelum ganti
-      setCurrentTrack((prev) => {
-        if (prev && completed) {
-          setPlayHistory((h) => [{ ...prev, playedAt: Date.now() }, ...h].slice(0, 50));
-        }
-        return track;
-      });
+      const prev = currentTrackRef.current;
+      if (prev && completed) {
+        setPlayHistory((h) => {
+          // Hindari duplikasi lagu yang sama berturut-turut di history dengan ID/waktu yang sama
+          const alreadyExists = h.some(x => x.id === prev.id && Math.abs(x.playedAt - Date.now()) < 5000);
+          if (alreadyExists) return h;
+          return [{ ...prev, playedAt: Date.now() }, ...h].slice(0, 50);
+        });
+      }
+      setCurrentTrack(track);
       setIsPlaying(track !== null);
       // Reset tebakan setiap lagu baru
       setHasGuessed(false);

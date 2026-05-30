@@ -204,6 +204,10 @@ export default function GuestView() {
       setHasGuessed(false); // boleh lihat hasil tapi udah kelar
     });
 
+    socket.on('queue:moved', ({ nickname: moveNickname, trackTitle, direction, cost }) => {
+      addToast(`${moveNickname} membayar ${cost} poin untuk ${direction === 'up' ? 'menaikkan' : 'menurunkan'} lagu "${trackTitle}"`, 'success');
+    });
+
     socket.on('session:closed', ({ message }) => {
       clearIdentity(code);  // Clear stored identity when session closes
       addToast(message, 'info');
@@ -239,6 +243,7 @@ export default function GuestView() {
       socket.off('queue:add:success');
       socket.off('queue:add:rejected');
       socket.off('game:roundResults');
+      socket.off('queue:moved');
       socket.off('session:closed');
       socket.off('host:disconnected');
       socket.off('error');
@@ -304,10 +309,17 @@ export default function GuestView() {
     addToast(`Tebakan "${guestNickname}" terkirim! ⏳`, 'info');
   }
 
+  const handleMoveTrack = useCallback((trackId, direction) => {
+    if (!socketRef.current?.connected) return;
+    socketRef.current.emit('queue:move', { trackId, direction });
+  }, []);
+
   // My active song count + dynamic limit from session
   const myGuest = session?.guests?.find((g) => g.id === myGuestId);
   const mySongCount = myGuest?.activeSongCount || 0;
   const atLimit = mySongCount >= songLimit;
+  const myScore = myGuest?.score || 0;
+  const queueModifyCost = session?.queueModifyCost !== undefined ? session.queueModifyCost : 20;
 
   // ──── DEVICE BLOCKED SCREEN ────
   if (deviceBlocked) {
@@ -468,11 +480,21 @@ export default function GuestView() {
           </div>
         </div>
 
-        <div className="guest-song-counter">
-          <span className={`song-count ${atLimit ? 'at-limit' : ''}`}>
-            {mySongCount}/{songLimit}
-          </span>
-          <span className="song-count-label">lagumu</span>
+        <div className="guest-header-right" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div className="guest-song-counter">
+            <span className={`song-count ${atLimit ? 'at-limit' : ''}`}>
+              {mySongCount}/{songLimit}
+            </span>
+            <span className="song-count-label">lagumu</span>
+          </div>
+          {session?.isGuessingGameEnabled && (
+            <div className="guest-song-counter" style={{ background: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+              <span className="song-count" style={{ color: '#10b981' }}>
+                {myScore}
+              </span>
+              <span className="song-count-label">poin</span>
+            </div>
+          )}
         </div>
       </header>
 
@@ -811,6 +833,9 @@ export default function GuestView() {
               isHost={false}
               currentTrack={currentTrack}
               isGuessingGameEnabled={session?.isGuessingGameEnabled || false}
+              myScore={myScore}
+              queueModifyCost={queueModifyCost}
+              onMove={handleMoveTrack}
             />
           </div>
         )}

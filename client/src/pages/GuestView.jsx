@@ -473,8 +473,9 @@ export default function GuestView() {
       {/* Guessing Game */}
       {session?.isGuessingGameEnabled && currentTrack && (() => {
         // Siapa saja yang bisa ditebak? Semua guest kecuali diri sendiri dan requester lagu saat ini
+        // Semua guest bisa jadi jawaban kecuali diri sendiri
         const guessableGuests = (session?.guests || []).filter(
-          (g) => g.id !== myGuestId && g.id !== currentTrack?.requestedBy
+          (g) => g.id !== myGuestId
         );
         const iAmRequester = currentTrack?.requestedBy === myGuestId;
 

@@ -865,15 +865,19 @@ export default function GuestView() {
                     .sort((a, b) => (b.totalRequestedSongs || 0) - (a.totalRequestedSongs || 0))
                     .filter(g => (g.totalRequestedSongs || 0) > 0)
                     .slice(0, 5)
-                    .map((g, i) => (
-                      <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px' }}>
-                        <span style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-                          {i + 1}. {g.nickname}
-                          {g.id === myGuestId && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '0.75rem' }}>(kamu)</span>}
-                        </span>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 600 }}>{g.totalRequestedSongs} lagu</span>
-                      </div>
-                    ))}
+                    .map((g, i) => {
+                      const isOnline = g.isOnline !== false;
+                      return (
+                        <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px', opacity: isOnline ? 1 : 0.6, transition: 'opacity 0.2s' }}>
+                          <span style={{ fontSize: '0.9rem', color: isOnline ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                            {i + 1}. {g.nickname}
+                            {g.id === myGuestId && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '0.75rem' }}>(kamu)</span>}
+                            {!isOnline && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '4px' }}>(offline)</span>}
+                          </span>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 600 }}>{g.totalRequestedSongs} lagu</span>
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </div>
@@ -892,15 +896,19 @@ export default function GuestView() {
                       .sort((a, b) => (b.score || 0) - (a.score || 0))
                       .filter(g => (g.score || 0) > 0)
                       .slice(0, 5)
-                      .map((g, i) => (
-                        <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px' }}>
-                          <span style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-                            {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {g.nickname}
-                            {g.id === myGuestId && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '0.75rem' }}>(kamu)</span>}
-                          </span>
-                          <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 600 }}>{g.score} pts</span>
-                        </div>
-                      ))}
+                      .map((g, i) => {
+                        const isOnline = g.isOnline !== false;
+                        return (
+                          <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px', opacity: isOnline ? 1 : 0.6, transition: 'opacity 0.2s' }}>
+                            <span style={{ fontSize: '0.9rem', color: isOnline ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                              {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {g.nickname}
+                              {g.id === myGuestId && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '0.75rem' }}>(kamu)</span>}
+                              {!isOnline && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '4px' }}>(offline)</span>}
+                            </span>
+                            <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 600 }}>{g.score} pts</span>
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>

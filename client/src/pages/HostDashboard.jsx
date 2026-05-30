@@ -32,6 +32,7 @@ export default function HostDashboard() {
   const endedPollingInterval = useRef(null); // fallback: detect track end via polling
   const playerControls      = useRef(null);
   const isFirstConnect      = useRef(true);
+  const currentTrackRef     = useRef(null);
   // Stable ref for emitting playback:ended — safe to call from inside intervals
   const emitEndedRef = useRef(() => socketRef.current?.emit('playback:ended'));
 
@@ -111,6 +112,10 @@ export default function HostDashboard() {
     playerControls.current?.setVolume?.(volume);
   }, [volume]);
 
+  useEffect(() => {
+    currentTrackRef.current = currentTrack;
+  }, [currentTrack]);
+
   // playbackState sync: keep Media Session in sync with isPlaying changes
   // (metadata is handled by the hook via nowPlaying; we only need playbackState here)
   useEffect(() => {
@@ -164,13 +169,20 @@ export default function HostDashboard() {
       addToast('Koneksi pulih ✓', 'info');
 
       if (session.currentTrack) {
+        const isSameTrack = currentTrackRef.current && currentTrackRef.current.videoId === session.currentTrack.videoId;
         setCurrentTrack(session.currentTrack);
         if (session.isPlaying) {
-          playerControls.current?.loadAndPlay?.(session.currentTrack.videoId);
+          if (!isSameTrack) {
+            playerControls.current?.loadAndPlay?.(session.currentTrack.videoId);
+          } else {
+            // Jika lagunya sama, cukup pastikan dia sedang berputar
+            playerControls.current?.play?.();
+          }
           setIsPlaying(true);
           startProgressTracking();
         } else {
           setIsPlaying(false);
+          playerControls.current?.pause?.();
         }
         // Media Session metadata is updated automatically by the hook (nowPlaying prop)
       }

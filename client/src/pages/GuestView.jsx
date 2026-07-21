@@ -275,7 +275,7 @@ export default function GuestView() {
   }
 
   async function handleValidateUrl(e) {
-    e.preventDefault();
+    e?.preventDefault();
     if (!youtubeUrl.trim()) return;
 
     setValidating(true);
@@ -283,11 +283,34 @@ export default function GuestView() {
     setPreview(null);
 
     try {
-      const res = await axios.post('/api/validate', { url: youtubeUrl.trim() });
-      if (res.data.valid) {
-        setPreview(res.data);
+      const url = youtubeUrl.trim();
+      let videoId = null;
+      const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+        /^([a-zA-Z0-9_-]{11})$/
+      ];
+      for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match && match[1]) { videoId = match[1]; break; }
+      }
+
+      if (!videoId) {
+        setSubmitError('URL tidak valid atau format salah.');
+        setValidating(false);
+        return;
+      }
+
+      const res = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
+      const oembed = await res.json();
+      
+      if (oembed.error || !oembed.title) {
+        setSubmitError('Video tidak dapat ditemukan atau tidak diizinkan.');
       } else {
-        setSubmitError(res.data.reason);
+        setPreview({
+          videoId,
+          title: oembed.title,
+          thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+        });
       }
     } catch {
       setSubmitError('Gagal memvalidasi link. Periksa koneksi internet.');

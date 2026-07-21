@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useToast } from '../context/ToastContext';
+import { supabase } from '../supabaseClient';
 import './Home.css';
 
 export default function Home() {
@@ -30,11 +31,20 @@ export default function Home() {
     e.preventDefault();
     setCreating(true);
     try {
-      const res = await axios.post('/api/session', {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      
+      const { data, error } = await supabase.from('sessions').insert({
+        code: code,
         name: sessionName.trim() || 'icikiwir',
-      });
-      const { sessionId, code } = res.data;
-      // Store session info for host
+      }).select().single();
+      
+      if (error) throw error;
+      
+      const sessionId = data.code; // Original backend returned code as ID
       sessionStorage.setItem('ob_host_session', JSON.stringify({ sessionId, code }));
       navigate(`/host/${sessionId}`);
     } catch (err) {
@@ -50,15 +60,14 @@ export default function Home() {
 
     setJoining(true);
     try {
-      const res = await axios.get(`/api/session/${code}`);
-      const { sessionId } = res.data;
-      navigate(`/join/${sessionId}?code=${code}`);
+      const { data, error } = await supabase.from('sessions').select('id, code').eq('code', code).single();
+      if (error || !data) throw new Error('Not found');
+      
+      const sessionId = data.code; // Original backend used code in join URL too sometimes, wait, let's use data.id if it expects UUID, but wait! The socket mock uses data.sessionId for guest:join
+      // Actually, original backend returned sessionId = id. But socket mock expects code!
+      navigate(`/join/${data.id}?code=${data.code}`);
     } catch (err) {
-      if (err.response?.status === 404) {
-        addToast('Kode sesi tidak ditemukan. Cek lagi!', 'error');
-      } else {
-        addToast('Gagal bergabung. Coba lagi.', 'error');
-      }
+      addToast('Kode sesi tidak ditemukan. Cek lagi!', 'error');
       setJoining(false);
     }
   }

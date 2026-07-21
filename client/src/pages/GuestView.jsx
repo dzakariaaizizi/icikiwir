@@ -733,7 +733,8 @@ export default function GuestView() {
                         <div className="q-info" style={{ flex: 1, minWidth: 0 }}>
                           <div className="q-title" style={{ fontSize: '1rem', fontWeight: '600', color: '#fff', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.title}</div>
                           <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
-                            {track.authorName} <span style={{ margin: '0 4px' }}>•</span> {isGuessing ? '???' : (req ? req.nickname : 'Anon')}
+                            {track.authorName ? <>{track.authorName} <span style={{ margin: '0 4px' }}>•</span> diminta </> : 'diminta '} 
+                            {isGuessing ? '???' : (track.requestedByNickname || (req ? req.nickname : 'Anon'))}
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

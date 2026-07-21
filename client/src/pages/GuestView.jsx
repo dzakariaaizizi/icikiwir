@@ -642,22 +642,31 @@ export default function GuestView() {
             </div>
           )}
 
-          <div className="dash-panel flex-1">
+          <div className="dash-panel">
             <h3 className="panel-title">Daftar Antrian</h3>
             <div className="panel-content scrollable">
               {(!session?.queue || session.queue.length === 0) ? (
                 <p className="text-hint text-center py-8">Antrian kosong.</p>
               ) : (
-                <div className="queue-list-compact">
+                <div className="queue-list-compact" style={{ gap: '8px' }}>
                   {session.queue.map((track, i) => {
                     const req = session.guests?.find(g => g.id === track.requestedBy);
+                    const isGuessing = session.isGuessingGameEnabled;
                     return (
-                      <div key={track.id} className="queue-item-compact">
-                        <span className="q-num">{i + 1}</span>
-                        <img src={track.thumbnail} alt="" className="q-thumb" />
-                        <div className="q-info">
-                          <div className="q-title">{track.title}</div>
-                          <div className="q-req">Requested by: {req ? req.nickname : 'Anon'}</div>
+                      <div key={track.id} className="queue-item-compact" style={{ background: 'var(--bg-primary)', border: '1px solid rgba(255,255,255,0.06)', padding: '12px', borderRadius: '12px', gap: '16px' }}>
+                        <span style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(99, 102, 241, 0.5)', borderRadius: '50%', color: '#a78bfa', fontSize: '0.9rem', fontWeight: 'bold', background: 'rgba(99, 102, 241, 0.1)', flexShrink: 0 }}>
+                          {i + 1}
+                        </span>
+                        <img src={track.thumbnail} alt="" className="q-thumb" style={{ width: '64px', height: '48px', borderRadius: '8px', flexShrink: 0 }} />
+                        <div className="q-info" style={{ flex: 1, minWidth: 0 }}>
+                          <div className="q-title" style={{ fontSize: '1rem', fontWeight: '600', color: '#fff', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.title}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#6b7280' }}>
+                            {track.authorName} <span style={{ margin: '0 4px' }}>•</span> {isGuessing ? '???' : (req ? req.nickname : 'Anon')}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <button disabled style={{ background: 'rgba(255,255,255,0.03)', border: 'none', borderRadius: '4px', padding: '4px 8px', color: 'rgba(255,255,255,0.1)' }}>▲</button>
+                          <button disabled style={{ background: 'rgba(255,255,255,0.03)', border: 'none', borderRadius: '4px', padding: '4px 8px', color: 'rgba(255,255,255,0.1)' }}>▼</button>
                         </div>
                       </div>
                     );

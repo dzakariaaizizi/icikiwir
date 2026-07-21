@@ -491,219 +491,501 @@ export default function GuestView() {
   }
 
   // ──── GUEST DASHBOARD ────
-  // Sort guests for Klasemen Request (by addedCount)
-  const guestsByRequest = [...(session?.guests || [])].sort((a, b) => (b.addedCount || 0) - (a.addedCount || 0));
-  
-  // Sort guests for Klasemen Tebak (by score)
-  const guestsByScore = [...(session?.guests || [])].sort((a, b) => (b.score || 0) - (a.score || 0));
-
-  const iAmRequester = currentTrack?.requestedBy === myGuestId;
-  const guestList = (session?.guests || []).filter((g) => g.id !== myGuestId);
-  const requesterInList = guestList.some((g) => g.id === currentTrack?.requestedBy);
-  const guessableGuests = (!iAmRequester && !requesterInList && currentTrack?.requestedBy)
-    ? [...guestList, { id: currentTrack.requestedBy, nickname: currentTrack.requestedByNickname || '?' }]
-    : guestList;
-
   return (
-    <div className="guest-dashboard">
-      {/* Header Full Width */}
-      <header className="dashboard-header glass">
-        <div className="header-left">
-          <span className="session-name">{session?.name || 'icikiwir'}</span>
-          <span className="guest-nickname">{nickname}</span>
-          <span className={`status-dot ${connected ? 'online' : 'offline'}`} />
+    <div className="guest-page">
+      {/* Header */}
+      <header className="guest-header glass">
+        <div className="guest-header-left">
+          <div className="logo-icon-sm accent">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+            </svg>
+          </div>
+          <div>
+            <span className="guest-session-name">{session?.name || 'icikiwir'}</span>
+            <div className="guest-status-row">
+              <span className={`status-dot ${connected ? 'online' : 'offline'}`} />
+              <span className="guest-nickname-chip">{nickname}</span>
+            </div>
+          </div>
         </div>
-        <div className="header-right">
-          <div className="quota-pill">
+
+        <div className="guest-header-right" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div className="guest-song-counter">
             <span className={`song-count ${atLimit ? 'at-limit' : ''}`}>
               {mySongCount}/{songLimit}
             </span>
-            <span className="label">lagumu</span>
+            <span className="song-count-label">lagumu</span>
           </div>
+          {session?.isGuessingGameEnabled && (
+            <div className="guest-song-counter" style={{ background: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+              <span className="song-count" style={{ color: '#10b981' }}>
+                {myScore}
+              </span>
+              <span className="song-count-label">poin</span>
+            </div>
+          )}
         </div>
       </header>
 
-      <div className="dashboard-grid">
-        
-        {/* KOLOM KIRI */}
-        <div className="dash-col col-left">
-          <div className="dash-panel flex-1">
-            <h3 className="panel-title">Klasemen Request</h3>
-            <div className="panel-content scrollable">
-              {guestsByRequest.map((g, i) => (
-                <div key={g.id} className="list-item">
-                  <span className="rank">#{i+1}</span>
-                  <span className="name">{g.nickname} {g.id === myGuestId && '(You)'}</span>
-                  <span className="stat">{g.addedCount} lagu</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="dash-panel flex-1">
-            <h3 className="panel-title">Klasemen Tebak</h3>
-            <div className="panel-content scrollable">
-              {guestsByScore.map((g, i) => (
-                <div key={g.id} className="list-item">
-                  <span className="rank">#{i+1}</span>
-                  <span className="name">{g.nickname} {g.id === myGuestId && '(You)'}</span>
-                  <span className="stat score-stat">{g.score || 0} pts</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* Now Playing Banner */}
+      <div className="guest-now-playing glass">
+        <NowPlaying
+          track={currentTrack}
+          isPlaying={isPlaying}
+          compact={true}
+          isGuessingGameEnabled={session?.isGuessingGameEnabled || false}
+          hasQueue={(session?.queue || []).length > 0}
+        />
+      </div>
 
-        {/* KOLOM TENGAH */}
-        <div className="dash-col col-middle">
-          <div className="dash-panel">
-            <h3 className="panel-title">Request Lagu</h3>
-            <div className="panel-content">
-              {atLimit ? (
-                <div className="limit-warning" style={{ margin: 0, padding: '16px' }}>
-                  <p>Limit lagumu sudah habis. Tunggu lagumu diputar!</p>
-                </div>
-              ) : (
-                <>
-                  <div className="input-group" style={{ marginBottom: preview ? '12px' : 0 }}>
-                    <input
-                      type="text"
-                      className="input-field"
-                      placeholder="https://youtube.com/watch?v=..."
-                      value={youtubeUrl}
-                      onChange={(e) => {
-                        setYoutubeUrl(e.target.value);
-                        setSubmitError('');
-                        setPreview(null);
-                      }}
-                      onBlur={checkLink}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') checkLink();
-                      }}
-                      disabled={validating || submitting}
-                    />
-                  </div>
-                  {validating && <p className="text-hint">Memeriksa link...</p>}
-                  {submitError && <p className="text-error">{submitError}</p>}
-                  {preview && (
-                    <div className="preview-card" style={{ marginTop: '12px' }}>
-                      <img src={preview.thumbnail} alt="" className="preview-thumb" />
-                      <div className="preview-info">
-                        <strong>{preview.title}</strong>
-                        <button 
-                          className="btn btn-primary" 
-                          onClick={handleSubmitTrack}
-                          disabled={submitting}
-                          style={{ marginTop: '8px', padding: '8px 16px', fontSize: '0.9rem' }}
-                        >
-                          {submitting ? 'Menambahkan...' : 'Tambah ke Antrian'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
+      {/* Guessing Game */}
+      {session?.isGuessingGameEnabled && currentTrack && (() => {
+        const iAmRequester = currentTrack?.requestedBy === myGuestId;
 
-          {session?.isGuessingGameEnabled && currentTrack && (
-            <div className="dash-panel">
-              <h3 className="panel-title">Tebak Lagu</h3>
-              <div className="panel-content">
-                {roundResult ? (
-                  <div className="guess-result">
-                    <p>{roundResult.correctGuessers?.includes(myGuestId) ? '🎉 Tebakanmu benar!' : `❌ Jawabannya: ${roundResult.requesterNickname || '?'}`}</p>
-                  </div>
-                ) : iAmRequester ? (
-                  <p className="text-hint text-center py-4">Lagu kamu sedang diputar! Biarkan temanmu menebak.</p>
-                ) : hasGuessed && submittedGuess ? (
-                  <p className="text-hint text-center py-4">Tebakanmu: <strong>{submittedGuess.nickname}</strong>. Tunggu hasilnya!</p>
+        // Semua guest kecuali diri sendiri
+        const guestList = (session?.guests || []).filter((g) => g.id !== myGuestId);
+
+        // Pastikan requester selalu ada di opsi — walau tidak ada di session.guests
+        // (bisa terjadi kalau guest disconnect setelah request)
+        const requesterInList = guestList.some((g) => g.id === currentTrack.requestedBy);
+        const guessableGuests = (!iAmRequester && !requesterInList && currentTrack.requestedBy)
+          ? [...guestList, { id: currentTrack.requestedBy, nickname: currentTrack.requestedByNickname || '?' }]
+          : guestList;
+
+        // Tampilkan hasil ronde
+        if (roundResult) {
+          const iWasCorrect = roundResult.correctGuessers?.includes(myGuestId);
+          const requesterNick = roundResult.requesterNickname || '?';
+          return (
+            <div className={`guessing-game-card ${iWasCorrect ? 'success' : ''}`} style={{ margin: '0 var(--space-4) var(--space-2)' }}>
+              <div className="guessing-game-glow" />
+              <div className="guessing-success-content">
+                <div className="success-icon">{iWasCorrect ? '✓' : '🎵'}</div>
+                <div className="success-text">
+                  <p>{iWasCorrect ? 'Tebakanmu benar!' : `Jawabannya: ${requesterNick}`}</p>
+                  <small>
+                    {roundResult.correctGuessers?.length || 0} orang menebak benar
+                  </small>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        if (iAmRequester) {
+          return (
+            <div className="guessing-game-card" style={{ margin: '0 var(--space-4) var(--space-2)' }}>
+              <div className="guessing-game-glow" />
+              <div className="guessing-game-content">
+                <div className="guessing-own-track">
+                  <span className="guessing-icon">🎤</span>
+                  <h3>Lagu kamu yang lagi diputar!</h3>
+                  <p>Teman-temanmu sedang menebak siapa yang request lagu ini.</p>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        if (hasGuessed && submittedGuess) {
+          return (
+            <div className="guessing-game-card success" style={{ margin: '0 var(--space-4) var(--space-2)' }}>
+              <div className="guessing-success-content">
+                <div className="success-icon">⏳</div>
+                <div className="success-text">
+                  <p>Tebakan terkirim: <strong>{submittedGuess.nickname}</strong></p>
+                  <small>Tunggu lagu selesai untuk melihat hasilnya</small>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="guessing-game-card" style={{ margin: '0 var(--space-4) var(--space-2)' }}>
+            <div className="guessing-game-glow" />
+            <div className="guessing-game-content">
+              <div className="guessing-title">
+                <span className="guessing-icon">🎯</span>
+                Siapa yang request lagu ini?
+              </div>
+              <div className="guessing-options">
+                {guessableGuests.length === 0 ? (
+                  <span className="guessing-empty">Belum ada kandidat untuk ditebak</span>
                 ) : (
-                  <div className="guess-grid">
-                    {guessableGuests.map(g => (
+                  guessableGuests.map((g) => {
+                    const initials = g.nickname.slice(0, 2).toUpperCase();
+                    const hue = [...g.id].reduce((n, c) => n + c.charCodeAt(0), 0) % 360;
+                    return (
                       <button
                         key={g.id}
-                        className="btn-guess"
-                        onClick={() => {
-                          if (!hasGuessed && socketRef.current) {
-                            socketRef.current.emit('guest:guess', { guessedGuestId: g.id });
-                            setHasGuessed(true);
-                            setSubmittedGuess({ guestId: g.id, nickname: g.nickname });
-                            addToast('Tebakan terkirim!', 'info');
-                          }
-                        }}
+                        className="guessing-btn"
+                        onClick={() => handleGuess(g.id, g.nickname)}
+                        disabled={hasGuessed}
                       >
+                        <div
+                          className="guessing-avatar"
+                          style={{ background: `hsl(${hue}, 60%, 40%)` }}
+                        >
+                          {initials}
+                        </div>
                         {g.nickname}
                       </button>
-                    ))}
-                  </div>
+                    );
+                  })
                 )}
               </div>
             </div>
+          </div>
+        );
+      })()}
+
+      {/* Tabs */}
+      <div className="guest-tabs">
+        <button
+          id="tab-submit"
+          className={`guest-tab ${activeTab === 'submit' ? 'active' : ''}`}
+          onClick={() => setActiveTab('submit')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="16" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+          </svg>
+          Request Lagu
+        </button>
+        <button
+          id="tab-queue"
+          className={`guest-tab ${activeTab === 'queue' ? 'active' : ''}`}
+          onClick={() => setActiveTab('queue')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6" />
+            <line x1="8" y1="12" x2="21" y2="12" />
+            <line x1="8" y1="18" x2="21" y2="18" />
+            <line x1="3" y1="6" x2="3.01" y2="6" />
+            <line x1="3" y1="12" x2="3.01" y2="12" />
+            <line x1="3" y1="18" x2="3.01" y2="18" />
+          </svg>
+          Antrian
+          {session?.queue?.length > 0 && (
+            <span className="tab-badge">{session.queue.length}</span>
           )}
+        </button>
+        <button
+          id="tab-leaderboard"
+          className={`guest-tab ${activeTab === 'leaderboard' ? 'active' : ''}`}
+          onClick={() => setActiveTab('leaderboard')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+            <polyline points="17 6 23 6 23 12" />
+          </svg>
+          Klasemen
+        </button>
+        <button
+          id="tab-history"
+          className={`guest-tab ${activeTab === 'history' ? 'active' : ''}`}
+          onClick={() => setActiveTab('history')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="12 8 12 12 14 14" />
+            <path d="M3.05 11a9 9 0 1 0 .5-4" />
+            <polyline points="3 3 3 7 7 7" />
+          </svg>
+          History
+        </button>
+      </div>
 
-          <div className="dash-panel flex-1">
-            <h3 className="panel-title">Daftar Antrian</h3>
-            <div className="panel-content scrollable">
-              {(!session?.queue || session.queue.length === 0) ? (
-                <p className="text-hint text-center py-8">Antrian kosong.</p>
-              ) : (
-                <div className="queue-list-compact">
-                  {session.queue.map((track, i) => {
-                    const req = session.guests?.find(g => g.id === track.requestedBy);
-                    return (
-                      <div key={track.id} className="queue-item-compact">
-                        <span className="q-num">{i + 1}</span>
-                        <img src={track.thumbnail} alt="" className="q-thumb" />
-                        <div className="q-info">
-                          <div className="q-title">{track.title}</div>
-                          <div className="q-req">Requested by: {req ? req.nickname : 'Anon'}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
+      {/* Tab Content */}
+      <div className="guest-content">
+        {activeTab === 'submit' && (
+          <div className="submit-panel animate-fadeIn">
+            {atLimit ? (
+              <div className="limit-warning">
+                <div className="limit-icon">⏳</div>
+                <h3>Limit Antrian Tercapai</h3>
+                <p>Kamu sudah punya {songLimit} lagu di antrian. Tunggu salah satunya selesai diputar, lalu kamu bisa tambah lagi!</p>
+              </div>
+            ) : (
+              <>
+                <div className="submit-instructions">
+                  <h2>Tambah Lagu</h2>
+                  <ol className="submit-steps">
+                    <li>
+                      <span className="step-num">1</span>
+                      <span>Buka YouTube di tab lain, cari lagu yang kamu mau</span>
+                    </li>
+                    <li>
+                      <span className="step-num">2</span>
+                      <span>Salin link dari address bar browser</span>
+                    </li>
+                    <li>
+                      <span className="step-num">3</span>
+                      <span>Paste link di sini dan konfirmasi</span>
+                    </li>
+                  </ol>
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
 
-        {/* KOLOM KANAN */}
-        <div className="dash-col col-right">
-          <div className="dash-panel">
-            <h3 className="panel-title">Sedang Dimainkan</h3>
-            <div className="panel-content" style={{ padding: 0 }}>
-              <NowPlaying
-                track={currentTrack}
-                isPlaying={isPlaying}
-                compact={true}
-                isGuessingGameEnabled={false}
-                hasQueue={false}
-              />
-            </div>
-          </div>
+                {!preview ? (
+                  <form onSubmit={handleValidateUrl} className="url-form">
+                    <div className="url-input-wrap">
+                      <div className="url-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22.54 6.42a2.78 2.78 0 00-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 00-1.95 1.96A29 29 0 001 12a29 29 0 00.46 5.58A2.78 2.78 0 003.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 001.95-1.95A29 29 0 0023 12a29 29 0 00-.46-5.58z" />
+                          <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" />
+                        </svg>
+                      </div>
+                      <input
+                        id="youtube-url-input"
+                        ref={urlInputRef}
+                        className="input-field url-input"
+                        type="url"
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        value={youtubeUrl}
+                        onChange={(e) => {
+                          setYoutubeUrl(e.target.value);
+                          setSubmitError('');
+                        }}
+                        autoComplete="off"
+                      />
+                    </div>
 
-          <div className="dash-panel flex-1">
-            <h3 className="panel-title">History</h3>
-            <div className="panel-content scrollable">
-              {playHistory.length === 0 ? (
-                <p className="text-hint text-center py-8">Belum ada lagu yang diputar.</p>
-              ) : (
-                <div className="history-list">
-                  {playHistory.map((track, i) => (
-                    <div key={track.id + i} className="history-item">
-                      <img src={track.thumbnail} alt="" className="h-thumb" />
-                      <div className="h-info">
-                        <div className="h-title">{track.title}</div>
+                    {submitError && (
+                      <div className="submit-error animate-fadeIn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        {submitError}
+                      </div>
+                    )}
+
+                    <button
+                      id="btn-validate-url"
+                      type="submit"
+                      className="btn btn-primary"
+                      style={{ width: '100%', justifyContent: 'center' }}
+                      disabled={validating || !youtubeUrl.trim()}
+                    >
+                      {validating ? (
+                        <>
+                          <span className="animate-spin">⟳</span>
+                          Mengecek video...
+                        </>
+                      ) : (
+                        <>
+                          Cek Video
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                        </>
+                      )}
+                    </button>
+                  </form>
+                ) : (
+                  <div className="preview-card animate-fadeIn">
+                    <div className="preview-header">
+                      <div className="preview-check">✓</div>
+                      <span>Video ditemukan!</span>
+                    </div>
+
+                    <div className="preview-content">
+                      <img
+                        src={preview.thumbnail}
+                        alt={preview.title}
+                        className="preview-thumb"
+                        onError={(e) => {
+                          e.target.src = `https://img.youtube.com/vi/${preview.videoId}/mqdefault.jpg`;
+                        }}
+                      />
+                      <div className="preview-info">
+                        <p className="preview-title">{preview.title}</p>
+                        <p className="preview-author">{preview.authorName}</p>
+                        <p className="preview-by">
+                          <span className="requester-dot small" />
+                          akan ditambahkan atas namamu
+                        </p>
                       </div>
                     </div>
-                  ))}
+
+                    {submitError && (
+                      <div className="submit-error animate-fadeIn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        {submitError}
+                      </div>
+                    )}
+
+                    <div className="preview-actions">
+                      <button className="btn btn-secondary" onClick={clearPreview}>
+                        Ganti Link
+                      </button>
+                      <button
+                        id="btn-confirm-add"
+                        className="btn btn-primary"
+                        onClick={handleSubmitTrack}
+                        disabled={submitting}
+                        style={{ flex: 1 }}
+                      >
+                        {submitting ? (
+                          <>
+                            <span className="animate-spin">⟳</span>
+                            Menambahkan...
+                          </>
+                        ) : (
+                          <>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10" />
+                              <line x1="12" y1="8" x2="12" y2="16" />
+                              <line x1="8" y1="12" x2="16" y2="12" />
+                            </svg>
+                            Tambah ke Antrian
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'queue' && (
+          <div className="queue-panel animate-fadeIn">
+            <QueueList
+              queue={session?.queue || []}
+              isHost={false}
+              currentTrack={currentTrack}
+              isGuessingGameEnabled={session?.isGuessingGameEnabled || false}
+              myScore={myScore}
+              queueModifyCost={queueModifyCost}
+              onMove={handleMoveTrack}
+            />
+          </div>
+        )}
+
+        {activeTab === 'leaderboard' && (
+          <div className="queue-panel animate-fadeIn" style={{ padding: '16px' }}>
+            {/* Top Requesters */}
+            <div style={{ marginBottom: '24px' }}>
+              <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                🎵 Top Requesters
+              </h4>
+              {(session?.guests || []).filter(g => (g.totalRequestedSongs || 0) > 0).length === 0 ? (
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '16px 0' }}>Belum ada data.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {[...(session?.guests || [])]
+                    .sort((a, b) => (b.totalRequestedSongs || 0) - (a.totalRequestedSongs || 0))
+                    .filter(g => (g.totalRequestedSongs || 0) > 0)
+                    .slice(0, 5)
+                    .map((g, i) => {
+                      const isOnline = g.isOnline !== false;
+                      return (
+                        <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px', opacity: isOnline ? 1 : 0.6, transition: 'opacity 0.2s' }}>
+                          <span style={{ fontSize: '0.9rem', color: isOnline ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                            {i + 1}. {g.nickname}
+                            {g.id === myGuestId && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '0.75rem' }}>(kamu)</span>}
+                            {!isOnline && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '4px' }}>(offline)</span>}
+                          </span>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 600 }}>{g.totalRequestedSongs} lagu</span>
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </div>
-          </div>
-        </div>
 
+            {/* Top Guessers — only show if guessing game enabled */}
+            {session?.isGuessingGameEnabled && (
+              <div>
+                <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  🎯 Top Guessers
+                </h4>
+                {(session?.guests || []).filter(g => (g.score || 0) > 0).length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '16px 0' }}>Belum ada yang menebak.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {[...(session?.guests || [])]
+                      .sort((a, b) => (b.score || 0) - (a.score || 0))
+                      .filter(g => (g.score || 0) > 0)
+                      .slice(0, 5)
+                      .map((g, i) => {
+                        const isOnline = g.isOnline !== false;
+                        return (
+                          <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface)', borderRadius: '8px', opacity: isOnline ? 1 : 0.6, transition: 'opacity 0.2s' }}>
+                            <span style={{ fontSize: '0.9rem', color: isOnline ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                              {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {g.nickname}
+                              {g.id === myGuestId && <span style={{ color: 'var(--accent)', marginLeft: '6px', fontSize: '0.75rem' }}>(kamu)</span>}
+                              {!isOnline && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '4px' }}>(offline)</span>}
+                            </span>
+                            <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 600 }}>{g.score} pts</span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div className="queue-panel animate-fadeIn" style={{ padding: '16px' }}>
+            <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              🎵 Riwayat Lagu Dimainkan
+            </h4>
+            {playHistory.length === 0 ? (
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '32px 0' }}>
+                Belum ada lagu yang selesai diputar.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {playHistory.map((track, i) => (
+                  <div key={track.id + i} style={{
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    padding: '10px 12px', background: 'var(--bg-card)',
+                    border: '1px solid var(--border)', borderRadius: '10px', opacity: 0.85
+                  }}>
+                    {track.thumbnail && (
+                      <img
+                        src={track.thumbnail}
+                        alt=""
+                        style={{ width: 52, height: 38, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }}
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {track.title}
+                      </p>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+                        {track.authorName}
+                        {track.requestedByNickname && (
+                          <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                            • diminta {track.requestedByNickname}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                      {new Date(track.playedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

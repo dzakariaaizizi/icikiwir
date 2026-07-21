@@ -565,41 +565,93 @@ export default function GuestView() {
                 </div>
               ) : (
                 <>
-                  <div className="input-group" style={{ marginBottom: preview ? '12px' : 0 }}>
-                    <input
-                      type="text"
-                      className="input-field"
-                      placeholder="https://youtube.com/watch?v=..."
-                      value={youtubeUrl}
-                      onChange={(e) => {
-                        setYoutubeUrl(e.target.value);
-                        setSubmitError('');
-                        setPreview(null);
-                      }}
-                      onBlur={handleValidateUrl}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleValidateUrl(e);
-                      }}
-                      disabled={validating || submitting}
-                    />
-                  </div>
-                  {validating && <p className="text-hint">Memeriksa link...</p>}
-                  {submitError && <p className="text-error">{submitError}</p>}
-                  {preview && (
-                    <div className="preview-card" style={{ marginTop: '12px' }}>
-                      <img src={preview.thumbnail} alt="" className="preview-thumb" />
-                      <div className="preview-info">
-                        <strong>{preview.title}</strong>
+                  {!preview ? (
+                    <>
+                      <div className="input-group" style={{ position: 'relative' }}>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="https://youtube.com/watch?v=..."
+                          value={youtubeUrl}
+                          onChange={(e) => {
+                            setYoutubeUrl(e.target.value);
+                            setSubmitError('');
+                            setPreview(null);
+                          }}
+                          onBlur={handleValidateUrl}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleValidateUrl(e);
+                          }}
+                          disabled={validating || submitting}
+                          style={{ paddingRight: '120px' }}
+                        />
+                        <button
+                          onClick={handleValidateUrl}
+                          disabled={validating || submitting}
+                          style={{
+                            position: 'absolute',
+                            right: '8px',
+                            top: '8px',
+                            bottom: '8px',
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#a78bfa',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            padding: '0 16px',
+                            borderRadius: '8px'
+                          }}
+                        >
+                          Cek Video &gt;
+                        </button>
+                      </div>
+                      {validating && <p className="text-hint">Memeriksa link...</p>}
+                      {submitError && <p className="text-error">{submitError}</p>}
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10b981', fontWeight: '600', marginBottom: '16px' }}>
+                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '1px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        </div>
+                        Video ditemukan!
+                      </div>
+                      <div className="preview-card" style={{ background: 'transparent', padding: '0', border: 'none', boxShadow: 'none' }}>
+                        <img src={preview.thumbnail} alt="" className="preview-thumb" style={{ width: '120px', height: '68px' }} />
+                        <div className="preview-info">
+                          <strong style={{ fontSize: '1rem', marginBottom: '4px' }}>{preview.title}</strong>
+                          <div style={{ fontSize: '0.85rem', color: '#9ca3af' }}>{preview.authorName}</div>
+                          <div style={{ fontSize: '0.8rem', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                            <span style={{ width: '6px', height: '6px', background: '#8b5cf6', borderRadius: '50%' }}></span>
+                            akan ditambahkan atas namamu
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                        <button 
+                          className="btn btn-secondary"
+                          onClick={() => { setPreview(null); setYoutubeUrl(''); }}
+                          disabled={submitting}
+                          style={{ flex: 1, background: '#374151', border: 'none', color: '#fff', fontWeight: '600', padding: '12px', borderRadius: '12px', cursor: 'pointer' }}
+                        >
+                          Ganti Link
+                        </button>
                         <button 
                           className="btn btn-primary" 
                           onClick={handleSubmitTrack}
                           disabled={submitting}
-                          style={{ marginTop: '8px', padding: '8px 16px', fontSize: '0.9rem' }}
+                          style={{ flex: 2, background: '#8b5cf6', border: 'none', color: '#fff', fontWeight: '600', padding: '12px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer' }}
                         >
-                          {submitting ? 'Menambahkan...' : 'Tambah ke Antrian'}
+                          {submitting ? 'Menambahkan...' : (
+                            <>
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                              Tambah ke Antrian
+                            </>
+                          )}
                         </button>
                       </div>
-                    </div>
+                    </>
                   )}
                 </>
               )}

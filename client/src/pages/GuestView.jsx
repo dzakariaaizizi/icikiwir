@@ -683,18 +683,31 @@ export default function GuestView() {
             </div>
           </div>
 
-          <div className="dash-panel flex-1">
-            <h3 className="panel-title">History</h3>
+          <div className="dash-panel">
+            <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#8b5cf6' }}>
+                <path d="M9 18V5l12-2v13"></path>
+                <circle cx="6" cy="18" r="3"></circle>
+                <circle cx="18" cy="16" r="3"></circle>
+              </svg>
+              Riwayat Lagu Dimainkan
+            </h3>
             <div className="panel-content scrollable">
               {playHistory.length === 0 ? (
                 <p className="text-hint text-center py-8">Belum ada lagu yang diputar.</p>
               ) : (
                 <div className="history-list">
                   {playHistory.map((track, i) => (
-                    <div key={track.id + i} className="history-item">
-                      <img src={track.thumbnail} alt="" className="h-thumb" />
+                    <div key={track.id + i} className="history-item" style={{ background: 'var(--bg-primary)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <img src={track.thumbnail} alt="" className="h-thumb" style={{ width: '56px', height: '42px' }} />
                       <div className="h-info">
-                        <div className="h-title">{track.title}</div>
+                        <div className="h-title" style={{ fontSize: '0.95rem', marginBottom: '2px', color: '#fff' }}>{track.title}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
+                          {track.authorName} <span style={{ color: '#6b7280', margin: '0 4px' }}>•</span> <span style={{ color: '#6b7280' }}>diminta {track.requestedByNickname || 'Anon'}</span>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '500' }}>
+                        {track.playedAt ? new Date(track.playedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.') : ''}
                       </div>
                     </div>
                   ))}

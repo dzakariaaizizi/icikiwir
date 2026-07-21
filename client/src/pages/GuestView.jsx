@@ -694,7 +694,7 @@ export default function GuestView() {
             </div>
           )}
 
-          <div className="dash-panel">
+          <div className="dash-panel flex-1">
             <h3 className="panel-title">Daftar Antrian</h3>
             <div className="panel-content scrollable">
               {(!session?.queue || session.queue.length === 0) ? (
@@ -744,7 +744,7 @@ export default function GuestView() {
             </div>
           </div>
 
-          <div className="dash-panel">
+          <div className="dash-panel flex-1">
             <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#8b5cf6' }}>
                 <path d="M9 18V5l12-2v13"></path>
@@ -753,7 +753,7 @@ export default function GuestView() {
               </svg>
               Riwayat Lagu Dimainkan
             </h3>
-            <div className="panel-content scrollable" style={{ maxHeight: '450px' }}>
+            <div className="panel-content scrollable">
               {playHistory.length === 0 ? (
                 <p className="text-hint text-center py-8">Belum ada lagu yang diputar.</p>
               ) : (

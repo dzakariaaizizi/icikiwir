@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'react'; // wait, framer-motion is motion/react in v12, but if user uses older it might be framer-motion. Let's use framer-motion. Actually they had motion/react in their code.
-// I will use framer-motion just in case, but let's stick to motion/react since that's what I installed.
-import { motion as motionBase, AnimatePresence as AnimatePresenceBase } from 'motion/react';
-import { Search, Plus, ListMusic, Trophy, Info, Home, Music, Loader2, History } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Search, Plus, ListMusic, Trophy, Info, Home, Music, Loader2 } from 'lucide-react';
 import { connectSocket, disconnectSocket } from '../socket';
 import { useToast } from '../context/ToastContext';
 
@@ -47,7 +45,6 @@ export default function GuestView() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const code = searchParams.get('code') || '';
 
   const [activeTab, setActiveTab] = useState('request');
 
@@ -68,20 +65,13 @@ export default function GuestView() {
   const [hasGuessed, setHasGuessed] = useState(false);
   const [submittedGuess, setSubmittedGuess] = useState(null);
   
-  const [playHistory, setPlayHistory] = useState(() => {
-    try {
-      const stored = localStorage.getItem(`ob_history_${code}`);
-      return stored ? JSON.parse(stored) : [];
-    } catch { return []; }
-  });
-
   const socketRef = useRef(null);
   const deviceId = useRef(getDeviceId());
   const myGuestId = useRef(null);
-  const currentTrackRef = useRef(null);
 
   // SOCKET SETUP
   useEffect(() => {
+    const code = searchParams.get('code') || '';
     const socket = connectSocket();
     socketRef.current = socket;
 
@@ -144,10 +134,11 @@ export default function GuestView() {
     });
 
     return () => disconnectSocket();
-  }, [addToast, isJoined, code]);
+  }, [addToast, isJoined, searchParams]);
 
   // AUTO-JOIN
   useEffect(() => {
+    const code = searchParams.get('code');
     if (!code) return;
     const stored = getStoredIdentity(code);
     if (stored && stored.guestId && !isJoined) {
@@ -159,32 +150,13 @@ export default function GuestView() {
         deviceId: deviceId.current
       });
     }
-  }, [code, isJoined]);
-
-  // HISTORY TRACKER
-  useEffect(() => {
-    if (session?.current_track?.id !== currentTrackRef.current?.id) {
-       if (currentTrackRef.current) {
-         const prev = currentTrackRef.current;
-         setPlayHistory(h => {
-           if (h.some(x => x.id === prev.id)) return h; // dedup
-           return [{...prev, playedAt: Date.now()}, ...h].slice(0, 50);
-         });
-       }
-       currentTrackRef.current = session?.current_track;
-    }
-  }, [session?.current_track]);
-
-  useEffect(() => {
-    if (code) {
-      try { localStorage.setItem(`ob_history_${code}`, JSON.stringify(playHistory)); } catch {}
-    }
-  }, [playHistory, code]);
+  }, [searchParams, isJoined]);
 
   function handleJoin(e) {
     e.preventDefault();
     if (!nickname.trim()) return addToast('Masukkan nama kamu.', 'warning');
     setJoining(true);
+    const code = searchParams.get('code') || '';
     socketRef.current.emit('guest:join', {
       code,
       nickname: nickname.trim(),
@@ -257,24 +229,24 @@ export default function GuestView() {
         <div className="absolute top-0 left-0 w-full h-96 bg-fuchsia-500/10 blur-[120px] rounded-full pointer-events-none" />
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-cyan-500/10 blur-[120px] rounded-full pointer-events-none" />
         
-        <div className="w-full max-w-sm glass-panel p-8 rounded-3xl z-10 shadow-2xl">
+        <div className="w-full max-w-sm glass-panel p-8 rounded-3xl z-10">
           <div className="flex justify-center mb-6">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/25">
               <Music className="w-8 h-8 text-white" />
             </div>
           </div>
           <h1 className="text-2xl font-bold text-center text-white mb-2">Join OfficeBeats</h1>
-          <p className="text-slate-400 text-center mb-8 text-sm">Masuk untuk mulai request dan main tebak-tebakan.</p>
+          <p className="text-slate-400 text-center mb-8 text-sm">Enter your nickname to start requesting songs.</p>
           
           <form onSubmit={handleJoin} className="space-y-4">
             <div>
               <input
                 type="text"
-                placeholder="Nama Kamu"
+                placeholder="Your Nickname"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 maxLength={20}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all text-center font-medium shadow-inner"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:border-violet-500/50 focus:bg-white/10 transition-all text-center font-medium"
               />
             </div>
             <button
@@ -282,7 +254,7 @@ export default function GuestView() {
               disabled={joining || !nickname.trim()}
               className="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {joining ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Mulai Party'}
+              {joining ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Enter Session'}
             </button>
           </form>
         </div>
@@ -296,11 +268,7 @@ export default function GuestView() {
   const maxQuota = session?.max_track_per_guest || 3;
   const myQuotaUsed = myGuestInfo?.addedCount || 0;
   
-  // Sort by score then addedCount
-  const sortedGuests = [...guests].sort((a, b) => {
-    if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
-    return (b.addedCount || 0) - (a.addedCount || 0);
-  });
+  const sortedGuests = [...guests].sort((a, b) => b.addedCount - a.addedCount);
 
   return (
     <div className="min-h-screen bg-[#07050A] flex flex-col lg:max-w-7xl mx-auto relative lg:p-6 lg:pb-0">
@@ -336,7 +304,7 @@ export default function GuestView() {
             {session?.is_playing && (
               <div className="relative z-10 flex items-end gap-0.5 h-4 mr-2">
                 {[1, 2, 3].map((i) => (
-                  <motionBase.div 
+                  <motion.div 
                     key={i}
                     className="w-1 bg-cyan-400 rounded-t-sm"
                     animate={{ height: ['40%', '100%', '40%'] }}
@@ -370,12 +338,11 @@ export default function GuestView() {
       {/* MAIN CONTENT GRID */}
       <main className="flex-1 lg:grid lg:grid-cols-12 lg:gap-8 p-4 lg:p-0 pb-24 lg:pb-8 custom-scrollbar lg:overflow-hidden">
         
-        {/* LEFT COLUMN: Leaderboard & History */}
-        <div className={`lg:col-span-3 flex flex-col gap-6 ${activeTab === 'leaderboard' || activeTab === 'history' ? 'block' : 'hidden lg:flex'}`}>
-          
+        {/* LEFT COLUMN: Leaderboard (Mobile Tab) & Desktop Now Playing */}
+        <div className={`lg:col-span-3 flex flex-col gap-6 ${activeTab === 'leaderboard' ? 'block' : 'hidden lg:flex'}`}>
           {/* Desktop Now Playing */}
           {currentTrack ? (
-            <div className="hidden lg:block glass-panel rounded-3xl overflow-hidden relative group h-64 shrink-0 shadow-lg">
+            <div className="hidden lg:block glass-panel rounded-3xl overflow-hidden relative group h-64 shrink-0">
               <div 
                 className="absolute inset-0 bg-cover bg-center opacity-40 group-hover:scale-105 transition-transform duration-700"
                 style={{ backgroundImage: `url(${currentTrack.thumbnail})` }}
@@ -400,71 +367,44 @@ export default function GuestView() {
             </div>
           )}
 
-          {/* Desktop specific: showing either Leaderboard or History based on mobile tab, but on desktop we can stack them or use a sub-tab */}
-          <div className="glass-panel p-6 rounded-3xl flex-1 lg:overflow-hidden flex flex-col shadow-lg">
-            <div className="flex gap-4 mb-6 shrink-0 border-b border-white/10 pb-2">
-              <button 
-                onClick={() => setActiveTab('leaderboard')}
-                className={`flex items-center gap-2 font-bold transition-colors ${activeTab !== 'history' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                <Trophy className={`w-4 h-4 ${activeTab !== 'history' ? 'text-yellow-500' : ''}`} /> Klasemen
-              </button>
-              <button 
-                onClick={() => setActiveTab('history')}
-                className={`flex items-center gap-2 font-bold transition-colors ${activeTab === 'history' ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                <History className={`w-4 h-4 ${activeTab === 'history' ? 'text-cyan-400' : ''}`} /> History
-              </button>
-            </div>
-
+          {/* Leaderboard Section */}
+          <div className="glass-panel p-6 rounded-3xl flex-1 lg:overflow-hidden flex flex-col">
+            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2 shrink-0">
+              <Trophy className="w-5 h-5 text-yellow-500" /> Tastemakers
+            </h2>
             <div className="space-y-3 lg:overflow-y-auto custom-scrollbar flex-1 pr-2">
-              {activeTab === 'history' ? (
-                /* HISTORY LIST */
-                playHistory.length === 0 ? (
-                  <p className="text-slate-500 text-sm text-center py-8">Belum ada riwayat lagu dimainkan.</p>
-                ) : playHistory.map((track, idx) => (
-                  <div key={track.id + idx} className="flex items-center gap-3 bg-white/5 p-2 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors">
-                    <img src={track.thumbnail} alt={track.title} className="w-10 h-8 rounded-lg object-cover bg-black shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-medium text-white line-clamp-2">{track.title}</h4>
-                    </div>
+              {sortedGuests.map((user, idx) => (
+                <div key={user.guestId} className="flex items-center gap-3 bg-white/5 p-3 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors">
+                  <div className={`text-sm font-bold w-4 text-center ${idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-700' : 'text-slate-600'}`}>
+                    {idx + 1}
                   </div>
-                ))
-              ) : (
-                /* LEADERBOARD LIST */
-                sortedGuests.map((user, idx) => (
-                  <div key={user.guestId} className="flex items-center gap-3 bg-white/5 p-3 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors">
-                    <div className={`text-sm font-bold w-4 text-center ${idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-700' : 'text-slate-600'}`}>
-                      {idx + 1}
-                    </div>
-                    <div className={`w-8 h-8 rounded-full ${getAvatarColor(user.nickname)} flex items-center justify-center text-white font-bold text-xs uppercase shrink-0`}>
-                      {user.nickname.charAt(0)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-white text-sm font-medium truncate flex items-center gap-2">
-                        {user.nickname}
-                        {user.guestId === myGuestId.current && <span className="px-1.5 py-0.5 rounded text-[9px] bg-white/10 text-slate-300 uppercase tracking-wider">You</span>}
-                      </h4>
-                      <p className="text-xs text-slate-400 truncate">{user.addedCount} lagu • <span className="text-fuchsia-400 font-semibold">{user.score || 0} poin</span></p>
-                    </div>
+                  <div className={`w-8 h-8 rounded-full ${getAvatarColor(user.nickname)} flex items-center justify-center text-white font-bold text-xs uppercase`}>
+                    {user.nickname.charAt(0)}
                   </div>
-                ))
-              )}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-white text-sm font-medium truncate flex items-center gap-2">
+                      {user.nickname}
+                      {user.guestId === myGuestId.current && <span className="px-1.5 py-0.5 rounded text-[9px] bg-white/10 text-slate-300 uppercase tracking-wider">You</span>}
+                    </h4>
+                    <p className="text-xs text-slate-400 truncate">{user.addedCount} lagu ditambahkan</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* MIDDLE COLUMN: Request */}
+        {/* MIDDLE COLUMN: Request (Mobile Tab) */}
         <div className={`lg:col-span-6 flex flex-col gap-6 ${activeTab === 'request' ? 'block' : 'hidden lg:flex'}`}>
-          <div className="glass-panel p-6 lg:p-8 rounded-3xl flex-1 flex flex-col lg:overflow-y-auto custom-scrollbar shadow-xl">
+          <div className="glass-panel p-6 lg:p-8 rounded-3xl flex-1 flex flex-col lg:overflow-y-auto custom-scrollbar">
             <div className="space-y-2 mb-8 shrink-0">
               <h2 className="text-2xl font-bold text-white">Tambah ke Antrian</h2>
               <p className="text-sm text-slate-400">Masukkan link YouTube lagu yang ingin kamu putar.</p>
             </div>
             
-            <AnimatePresenceBase>
+            <AnimatePresence>
               {!hasGuessed && currentTrack && guests.length > 1 && (
-                <motionBase.div
+                <motion.div
                   initial={{ opacity: 0, y: -20, height: 0 }}
                   animate={{ opacity: 1, y: 0, height: 'auto' }}
                   exit={{ opacity: 0, scale: 0.95, height: 0 }}
@@ -490,13 +430,13 @@ export default function GuestView() {
                       ))}
                     </div>
                   </div>
-                </motionBase.div>
+                </motion.div>
               )}
-            </AnimatePresenceBase>
+            </AnimatePresence>
             
-            <AnimatePresenceBase>
+            <AnimatePresence>
               {hasGuessed && currentTrack && submittedGuess && (
-                <motionBase.div
+                <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-3"
@@ -508,9 +448,9 @@ export default function GuestView() {
                     <p className="text-sm text-white">Kamu menebak <span className="font-bold text-violet-400">{submittedGuess.nickname}</span></p>
                     <p className="text-xs text-slate-400">Tunggu lagu selesai untuk melihat hasilnya!</p>
                   </div>
-                </motionBase.div>
+                </motion.div>
               )}
-            </AnimatePresenceBase>
+            </AnimatePresence>
 
             <div className="relative shrink-0 z-10 group">
               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -552,9 +492,9 @@ export default function GuestView() {
               </div>
             )}
 
-            <AnimatePresenceBase>
+            <AnimatePresence>
               {preview && (
-                <motionBase.div
+                <motion.div
                   initial={{ opacity: 0, height: 0, marginTop: 0 }}
                   animate={{ opacity: 1, height: 'auto', marginTop: 24 }}
                   exit={{ opacity: 0, height: 0, marginTop: 0 }}
@@ -580,9 +520,9 @@ export default function GuestView() {
                       {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Plus className="w-5 h-5" /> Tambah ke Antrian</>}
                     </button>
                   </div>
-                </motionBase.div>
+                </motion.div>
               )}
-            </AnimatePresenceBase>
+            </AnimatePresence>
             
             {!preview && !submitError && myQuotaUsed < maxQuota && (
               <div className="mt-8 flex-1 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-white/5 rounded-3xl min-h-[200px]">
@@ -595,9 +535,9 @@ export default function GuestView() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Queue */}
+        {/* RIGHT COLUMN: Queue (Mobile Tab) */}
         <div className={`lg:col-span-3 flex flex-col gap-6 ${activeTab === 'queue' ? 'block' : 'hidden lg:flex'}`}>
-          <div className="glass-panel p-6 rounded-3xl flex-1 flex flex-col lg:overflow-hidden shadow-lg">
+          <div className="glass-panel p-6 rounded-3xl flex-1 flex flex-col lg:overflow-hidden">
             <h2 className="text-xl font-bold text-white mb-6 flex items-center justify-between shrink-0">
               <span>Mendatang</span>
               <span className="text-xs font-mono text-slate-400 font-normal">{queue.length} lagu</span>
@@ -611,9 +551,9 @@ export default function GuestView() {
                 return (
                   <div key={track.id} className="flex items-center gap-3 bg-white/5 p-2 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors group">
                     <span className="text-xs font-mono text-slate-500 w-4 text-center group-hover:text-cyan-400 transition-colors">{idx + 1}</span>
-                    <img src={track.thumbnail} alt={track.title} className="w-10 h-8 rounded-lg object-cover bg-black shrink-0" />
+                    <img src={track.thumbnail} alt={track.title} className="w-10 h-8 rounded-lg object-cover bg-black" />
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-medium text-white line-clamp-2">{track.title}</h4>
+                      <h4 className="text-xs font-medium text-white truncate">{track.title}</h4>
                     </div>
                     <div className={`w-6 h-6 rounded-full ${getAvatarColor(reqName)} flex items-center justify-center text-[10px] font-bold text-white border border-white/5 shrink-0 uppercase`} title={`Requested by ${reqName}`}>
                       {reqName.charAt(0)}
@@ -628,38 +568,30 @@ export default function GuestView() {
       </main>
 
       {/* MOBILE TAB NAVIGATION */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 glass-panel border-t border-x-0 border-b-0 border-white/10 pb-safe pt-2 px-2 z-20">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 glass-panel border-t border-x-0 border-b-0 border-white/10 pb-safe pt-2 px-6 z-20">
         <div className="flex justify-between items-center max-w-sm mx-auto mb-2">
           <button 
             onClick={() => setActiveTab('request')}
-            className={`flex flex-col items-center gap-1 p-2 transition-colors flex-1 ${activeTab === 'request' ? 'text-violet-400' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'request' ? 'text-violet-400' : 'text-slate-500 hover:text-slate-300'}`}
           >
-            <Music className="w-5 h-5" />
+            <Music className="w-6 h-6" />
             <span className="text-[10px] font-medium">Request</span>
           </button>
           
           <button 
             onClick={() => setActiveTab('queue')}
-            className={`flex flex-col items-center gap-1 p-2 transition-colors flex-1 ${activeTab === 'queue' ? 'text-fuchsia-400' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'queue' ? 'text-fuchsia-400' : 'text-slate-500 hover:text-slate-300'}`}
           >
-            <ListMusic className="w-5 h-5" />
+            <ListMusic className="w-6 h-6" />
             <span className="text-[10px] font-medium">Antrian</span>
           </button>
           
           <button 
             onClick={() => setActiveTab('leaderboard')}
-            className={`flex flex-col items-center gap-1 p-2 transition-colors flex-1 ${activeTab === 'leaderboard' ? 'text-yellow-500' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`flex flex-col items-center gap-1 p-2 transition-colors ${activeTab === 'leaderboard' ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'}`}
           >
-            <Trophy className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Klasemen</span>
-          </button>
-
-          <button 
-            onClick={() => setActiveTab('history')}
-            className={`flex flex-col items-center gap-1 p-2 transition-colors flex-1 ${activeTab === 'history' ? 'text-cyan-400' : 'text-slate-500 hover:text-slate-300'}`}
-          >
-            <History className="w-5 h-5" />
-            <span className="text-[10px] font-medium">History</span>
+            <Trophy className="w-6 h-6" />
+            <span className="text-[10px] font-medium">Top Guest</span>
           </button>
         </div>
       </nav>

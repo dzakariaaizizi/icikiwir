@@ -527,7 +527,7 @@ export default function GuestView() {
         
         {/* KOLOM KIRI */}
         <div className="dash-col col-left">
-          <div className="dash-panel flex-1">
+          <div className="dash-panel">
             <h3 className="panel-title">Klasemen Request</h3>
             <div className="panel-content scrollable">
               {guestsByRequest.slice(0, 5).map((g, i) => (
@@ -540,7 +540,7 @@ export default function GuestView() {
             </div>
           </div>
           
-          <div className="dash-panel flex-1">
+          <div className="dash-panel">
             <h3 className="panel-title">Klasemen Tebak</h3>
             <div className="panel-content scrollable">
               {guestsByScore.slice(0, 5).map((g, i) => (

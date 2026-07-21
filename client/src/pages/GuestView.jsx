@@ -576,9 +576,9 @@ export default function GuestView() {
                         setSubmitError('');
                         setPreview(null);
                       }}
-                      onBlur={checkLink}
+                      onBlur={handleValidateUrl}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') checkLink();
+                        if (e.key === 'Enter') handleValidateUrl(e);
                       }}
                       disabled={validating || submitting}
                     />

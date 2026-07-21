@@ -672,7 +672,7 @@ export default function GuestView() {
         <div className="dash-col col-right">
           <div className="dash-panel">
             <h3 className="panel-title">Sedang Dimainkan</h3>
-            <div className="panel-content" style={{ padding: 0 }}>
+            <div className="panel-content">
               <NowPlaying
                 track={currentTrack}
                 isPlaying={isPlaying}

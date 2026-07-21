@@ -530,7 +530,7 @@ export default function GuestView() {
           <div className="dash-panel flex-1">
             <h3 className="panel-title">Klasemen Request</h3>
             <div className="panel-content scrollable">
-              {guestsByRequest.map((g, i) => (
+              {guestsByRequest.slice(0, 5).map((g, i) => (
                 <div key={g.id} className="list-item">
                   <span className="rank">#{i+1}</span>
                   <span className="name">{g.nickname} {g.id === myGuestId && '(You)'}</span>
@@ -543,7 +543,7 @@ export default function GuestView() {
           <div className="dash-panel flex-1">
             <h3 className="panel-title">Klasemen Tebak</h3>
             <div className="panel-content scrollable">
-              {guestsByScore.map((g, i) => (
+              {guestsByScore.slice(0, 5).map((g, i) => (
                 <div key={g.id} className="list-item">
                   <span className="rank">#{i+1}</span>
                   <span className="name">{g.nickname} {g.id === myGuestId && '(You)'}</span>
@@ -753,7 +753,7 @@ export default function GuestView() {
               </svg>
               Riwayat Lagu Dimainkan
             </h3>
-            <div className="panel-content scrollable">
+            <div className="panel-content scrollable" style={{ maxHeight: '450px' }}>
               {playHistory.length === 0 ? (
                 <p className="text-hint text-center py-8">Belum ada lagu yang diputar.</p>
               ) : (

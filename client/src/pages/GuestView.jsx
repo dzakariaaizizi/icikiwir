@@ -528,7 +528,12 @@ export default function GuestView() {
         {/* KOLOM KIRI */}
         <div className="dash-col col-left">
           <div className="dash-panel">
-            <h3 className="panel-title">Klasemen Request</h3>
+            <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#f59e0b' }}>
+                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+              </svg>
+              Klasemen Request
+            </h3>
             <div className="panel-content scrollable">
               {guestsByRequest.slice(0, 5).map((g, i) => (
                 <div key={g.id} className="list-item">
@@ -541,7 +546,12 @@ export default function GuestView() {
           </div>
           
           <div className="dash-panel">
-            <h3 className="panel-title">Klasemen Tebak</h3>
+            <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#10b981' }}>
+                <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>
+              </svg>
+              Klasemen Tebak
+            </h3>
             <div className="panel-content scrollable">
               {guestsByScore.slice(0, 5).map((g, i) => (
                 <div key={g.id} className="list-item">
@@ -557,7 +567,12 @@ export default function GuestView() {
         {/* KOLOM TENGAH */}
         <div className="dash-col col-middle">
           <div className="dash-panel">
-            <h3 className="panel-title">Request Lagu</h3>
+            <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#3b82f6' }}>
+                <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              Request Lagu
+            </h3>
             <div className="panel-content">
               {atLimit ? (
                 <div className="limit-warning" style={{ margin: 0, padding: '16px' }}>
@@ -695,7 +710,12 @@ export default function GuestView() {
           )}
 
           <div className="dash-panel flex-1">
-            <h3 className="panel-title">Daftar Antrian</h3>
+            <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#ec4899' }}>
+                <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>
+              </svg>
+              Daftar Antrian
+            </h3>
             <div className="panel-content scrollable">
               {(!session?.queue || session.queue.length === 0) ? (
                 <p className="text-hint text-center py-8">Antrian kosong.</p>
@@ -732,7 +752,12 @@ export default function GuestView() {
         {/* KOLOM KANAN */}
         <div className="dash-col col-right">
           <div className="dash-panel">
-            <h3 className="panel-title">Sedang Dimainkan</h3>
+            <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#10b981' }}>
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              Sedang Dimainkan
+            </h3>
             <div className="panel-content">
               <NowPlaying
                 track={currentTrack}
